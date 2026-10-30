@@ -1,0 +1,19 @@
+[package]
+name = "montworld"
+version = "0.1.0"
+edition = "2024"
+description = "Juego sandbox de construccion y exploracion en un mundo de bloques"
+publish = false
+
+[dependencies]
+winit = "0.30"
+glutin = "0.32"
+glutin-winit = "0.5"
+glow = "0.18"
+raw-window-handle = "0.6"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,44 @@
+REGLAS A SEGUIR DE LA IA
+Proyecto: Montworld
+============================================================
+
+1) PRUEBAS DEL JUEGO
+   Si es necesario probar algo del juego (probar una build, comprobar
+   un comportamiento, validar un cambio), la IA NO debe inventar ni
+   asumir resultados: debe hacer una "ask_question" al usuario para
+   que sea él quien realice la prueba y devuelva el resultado.
+
+   - Una prueba, una pregunta. Nada de pedir diez comprobaciones juntas.
+   - Explicar qué hay que probar, cómo y qué resultado se espera.
+   - No dar por bueno un cambio sin la respuesta del usuario.
+
+2) PASO A PASO
+   Ir paso a paso. No intentar crear todo el juego de la nada ni
+   reescribir el proyecto entero en una sola tanda.
+
+   - Un cambio pequeño y verificable por vez.
+   - Antes de tocar algo, leer el contexto y el roadmap.
+   - Si falta información, preguntar en lugar de suponer.
+
+3) DOCUMENTACIÓN AL DÍA
+   Mantener la documentación actualizada a la fecha.
+
+   - Actualizar "2 - Contexto General IA.txt" y "3 - Roadmap.txt"
+     al terminar cada paso relevante.
+   - Anotar la fecha del último cambio.
+   - Borrar o corregir lo que haya quedado obsoleto; no acumular
+     datos viejos que confundan a la próxima IA.
+
+4) COMPILACIÓN DE ANDROID / APK
+   El APK (y cualquier build de Android) se compila SOLO cuando el
+   usuario lo pide expresamente.
+
+   - No compilar el APK por iniciativa propia ni al terminar cada
+     cambio: cada build de Android tarda y retrasa el trabajo.
+   - La IA desarrolla y verifica en escritorio; para probar en el
+     móvil, pregunta primero al usuario.
+   - Si el usuario pide el APK, se compila, se entrega y se anota la
+     fecha en el roadmap.
+
+============================================================
+Estas reglas aplican a cualquier IA que trabaje en el proyecto.

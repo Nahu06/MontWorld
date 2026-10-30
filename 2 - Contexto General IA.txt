@@ -1,0 +1,141 @@
+CONTEXTO GENERAL IA
+Proyecto: Montworld
+============================================================
+
+PROPÓSITO DE ESTE DOCUMENTO
+Dar a cualquier IA (sesión nueva, otro modelo, otro día) el contexto
+mínimo y GENERAL para continuar el trabajo sin arrastrar información
+vieja ni dar por ciertas cosas que ya no aplican.
+
+Este documento NO es un historial. Es el estado general actual.
+
+------------------------------------------------------------
+1. QUÉ ES EL PROYECTO
+------------------------------------------------------------
+Juego sandbox de exploración y construcción en un mundo 3D
+formado por bloques (vóxeles). El terreno se genera por
+procedimientos y el jugador puede recorrerlo, romper bloques y
+construir. Se desarrolla como proyecto propio, con motor gráfico
+y lógica escritos desde cero: no se usa ningún motor de terceros.
+
+------------------------------------------------------------
+2. OBJETIVO ACTUAL
+------------------------------------------------------------
+Llegar a un prototipo jugable del motor de vóxeles en Rust:
+ventana, contexto OpenGL, cámara en primera persona, mundo por
+chunks con caras visibles renderizadas, y capacidad de romper y
+colocar bloques. Todo implementado en el proyecto, sin Bevy y sin
+Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
+
+------------------------------------------------------------
+3. ESTADO GENERAL
+------------------------------------------------------------
+Fase: prototipo (inicio de Fase 1)
+Funciona hoy: ventana con contexto OpenGL 3.3, bucle con pasos fijos a
+60 Hz, contador de FPS en el título, lanzador de escritorio y vsync.
+No funciona / falta: cámara, mundo, chunks, bloques y controles; no
+hay repositorio Git.
+
+------------------------------------------------------------
+4. TECNOLOGÍAS Y HERRAMIENTAS
+------------------------------------------------------------
+Lenguaje: Rust 1.99.1 (edition 2024).
+Gráficos: OpenGL 3.3 core en escritorio y OpenGL ES 3.x en Android,
+mediante winit + glutin + glow. Misma base técnica que Fulbax, pero
+proyecto independiente y sin código compartido.
+Prohibido por decisión del usuario: Bevy, Vulkan y cualquier motor
+comercial. Lo que haga falta se implementa en el proyecto.
+Android: SDK en ~/Android/Sdk, NDK 26.1.10909125, platform
+android-34, target aarch64-linux-android instalado, JDK 17.
+Política de build Android: el APK se compila únicamente cuando el
+usuario lo pide expresamente (ver regla 4 de "1 - Reglas a seguir de
+la IA.txt"). El desarrollo y la verificación diaria se hacen en
+escritorio; no se compila Android por iniciativa propia.
+Editor / IDE: sin definir.
+Control de versiones: sin definir (aún no hay repositorio Git).
+Entorno de desarrollo: Linux, sesión X11.
+
+------------------------------------------------------------
+5. REQUISITOS NO FUNCIONALES
+------------------------------------------------------------
+- Rendimiento mínimo: 60 fps estables en el PC de referencia y en
+  el móvil de referencia. No es un objetivo opcional.
+- Uso de memoria contenido: el PC tiene 6.7 GB de RAM compartida con
+  la gráfica integrada; el móvil es de gama baja.
+- Sin dependencias que arrastren Vulkan.
+- El juego debe compilar y ejecutarse tanto en escritorio como en
+  Android (aarch64).
+
+Hardware de referencia:
+- PC: Intel Core i5-4460 (4 núcleos, 3.2 GHz), gráfica Intel HD
+  Graphics 4600 integrada, 6.7 GB de RAM, Linux/X11.
+- Móvil: Samsung Galaxy A06 (Android, gama baja).
+
+------------------------------------------------------------
+6. ESTRUCTURA DE CARPETAS
+------------------------------------------------------------
+Estado: creada el 2026-10-30.
+
+Montworld/
+  1 - Reglas a seguir de la IA.txt
+  2 - Contexto General IA.txt
+  3 - Roadmap.txt
+  Cargo.toml            Configuración del crate y dependencias
+  .gitignore
+  run.sh                Compilar y ejecutar en escritorio
+  src/
+    main.rs             Punto de entrada y bucle de eventos
+    app.rs              Ciclo de vida y bucle principal (update/render)
+    clock.rs            Pasos fijos a 60 Hz y medición de FPS
+    gfx.rs              Ventana, contexto OpenGL y presentación
+  assets/
+    icono.png           Icono del lanzador
+  target/               Compilación (ignorada por Git)
+
+Lanzador: ~/Escritorio/montworld.desktop (copia en
+~/.local/share/applications para el menú).
+
+------------------------------------------------------------
+7. CONVENCIONES
+------------------------------------------------------------
+- Documentación en español, con prefijo numérico y orden fijo.
+- Un módulo por responsabilidad (ventana, input, render, mundo,
+  jugador, cámara). Nada de archivos gigantes.
+- Nombres de archivos de assets en minúsculas y con guiones bajos.
+- Código y nombres de identificadores: pendiente de definir
+  (propuesta: inglés para el código, comentarios en español).
+- No incluir en el código, nombres de archivos ni documentación
+  referencias a juegos comerciales ni a sus nombres.
+
+------------------------------------------------------------
+8. FUENTES DE VERDAD
+------------------------------------------------------------
+- Reglas de trabajo:        "1 - Reglas a seguir de la IA.txt"
+- Estado y pasos:           "3 - Roadmap.txt"
+- Contexto general:         este archivo
+Si algo contradice a estos documentos, preguntar al usuario antes
+de asumir.
+
+------------------------------------------------------------
+9. QUÉ NO ASUMIR
+------------------------------------------------------------
+- No asumir que el código actual está terminado ni que compila.
+- No asumir versiones, rutas ni dependencias sin comprobarlas.
+- No reutilizar decisiones antiguas que no estén reflejadas aquí.
+- No asumir mecánicas de otros juegos del género: el alcance se
+  define con el usuario y se anota en el roadmap.
+- Si un dato no está en este documento, no existe para la IA:
+  preguntar al usuario.
+
+------------------------------------------------------------
+10. REGISTRO DE ACTUALIZACIÓN
+------------------------------------------------------------
+Última actualización: 2026-10-30
+Actualizado por: IA
+Cambios: contexto completado con las decisiones del usuario
+(Rust sin motor, OpenGL/GLES sin Vulkan, objetivo de 60 fps en PC y
+Galaxy A06, hardware y herramientas disponibles).
+Añadida la política de build Android: el APK solo se compila cuando
+el usuario lo pide expresamente.
+Probado en escritorio: ventana + contexto OpenGL + bucle a 60 fps
+(confirmado por el usuario). Estructura real de carpetas anotada.

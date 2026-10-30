@@ -1,0 +1,87 @@
+ROADMAP
+Proyecto: Montworld
+============================================================
+
+CÓMO USAR ESTE DOCUMENTO
+- Se avanza paso a paso: una tarea pequeña por vez.
+- Estados posibles: [ ] Pendiente | [~] En curso | [x] Hecho
+- Al terminar una tarea, marcarla y actualizar la fecha.
+- Lo que deje de tener sentido se borra; no se acumula.
+
+------------------------------------------------------------
+VISIÓN GENERAL
+------------------------------------------------------------
+Un juego de exploración y construcción en mundo de vóxeles 3D,
+con motor propio en Rust (OpenGL en escritorio, OpenGL ES en
+Android), sin motores de terceros ni Vulkan, y con 60 fps como
+requisito mínimo en el PC de referencia y en el Galaxy A06.
+
+------------------------------------------------------------
+FASE 0 - BASE
+------------------------------------------------------------
+[x] Definir la idea general del juego (2026-10-30)
+[x] Elegir lenguaje y tecnología: Rust sin motor, OpenGL/GLES,
+    sin Bevy y sin Vulkan (2026-10-30)
+[x] Documentación inicial: reglas, contexto y roadmap (2026-10-30)
+[~] Definir el alcance del prototipo mínimo (mecánicas exactas)
+[x] Crear la estructura de carpetas y el proyecto Cargo (2026-10-30)
+[x] Script de ejecución en escritorio (run.sh) (2026-10-30)
+[x] Lanzador de escritorio con icono propio (2026-10-30)
+[ ] Definir estrategia de build para Android (aarch64), solo a
+    pedido del usuario
+
+------------------------------------------------------------
+FASE 1 - PROTOTIPO JUGABLE
+------------------------------------------------------------
+[x] Ventana y contexto OpenGL + bucle principal con delta time
+    (2026-10-30, probado por el usuario)
+[ ] Cámara en primera persona (teclado/ratón; táctil en Android)
+[ ] Datos de chunk y generación de un mundo de prueba
+[ ] Meshing de caras visibles y renderizado con atlas de texturas
+[ ] Romper y colocar bloques con raycast
+[ ] Mundo dividido en chunks con carga/descarga alrededor del jugador
+[ ] Guardado y carga del mundo
+
+------------------------------------------------------------
+FASE 2 - CONTENIDO
+------------------------------------------------------------
+[ ] Varios tipos de bloques y su atlas
+[ ] Generación de terreno por ruido (relieve, cuevas)
+[ ] Ciclo día/noche e iluminación
+[ ] Inventario / barra rápida de bloques
+[ ] [Por definir con el usuario: crafteo, supervivencia, criaturas,
+    multijugador]
+
+------------------------------------------------------------
+FASE 3 - PULIDO Y RENDIMIENTO
+------------------------------------------------------------
+[ ] Medir fps reales en PC y en Galaxy A06
+[ ] Optimizaciones: greedy meshing, frustum culling, niebla,
+    reducción de draw calls
+[ ] Sonido y música
+[ ] Ajustes de dificultad y balance
+[ ] Pruebas con el usuario (una comprobación por pregunta)
+[ ] Corrección de errores
+
+------------------------------------------------------------
+FASE 4 - PUBLICACIÓN
+------------------------------------------------------------
+[ ] Build final de escritorio
+[ ] Build APK para Android (solo cuando el usuario lo pida)
+[ ] Prueba final con el usuario
+[ ] Empaquetado / entrega
+
+------------------------------------------------------------
+REGISTRO
+------------------------------------------------------------
+2026-10-29 - Creación del roadmap inicial (plantilla).
+2026-10-30 - Fase 0 avanzada: idea y tecnología definidas (Rust,
+             OpenGL/GLES, sin Vulkan, objetivo 60 fps). Documentación
+             completada.
+             Nueva regla: el APK de Android solo se compila cuando el
+             usuario lo pide, para no frenar el desarrollo.
+             Estructura Cargo, run.sh y lanzador de escritorio creados.
+             Ventana + contexto OpenGL + bucle a 60 fps probados y
+             confirmados por el usuario.
+             Siguiente paso: definir el alcance mínimo y seguir con la
+             cámara en primera persona.
