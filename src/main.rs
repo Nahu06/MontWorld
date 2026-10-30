@@ -1,14 +1,14 @@
 //! Punto de entrada de Montworld.
 //!
-//! Crea el bucle de eventos del sistema y se lo entrega a la aplicacion,
-//! que se encarga de la ventana, el contexto grafico y el bucle principal.
+//! Crea el bucle de eventos del sistema y se lo entrega a la capa de
+//! aplicación, que orquesta juego y render.
 
 mod app;
-mod camera;
-mod clock;
-mod gfx;
-mod input;
-mod math;
+mod base;
+mod entrada;
+mod juego;
+mod jugador;
+mod render;
 mod world;
 
 use std::error::Error;
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // dormir el hilo principal para esperar eventos.
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = app::App::new();
+    let mut app = app::App::nuevo();
     event_loop.run_app(&mut app)?;
 
     Ok(())

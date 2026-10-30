@@ -1,20 +1,28 @@
-//! Camara en primera persona.
+//! Jugador: cámara en primera persona y movimiento.
 //!
-//! Guarda posicion y angulos (yaw/pitch) y construye las matrices de vista
-//! y proyeccion. El movimiento no comprueba colisiones: por ahora es una
-//! camara libre para poder explorar la escena de prueba.
+//! La cámara guarda posición y ángulos (yaw/pitch) y construye las
+//! matrices de vista y proyección. El movimiento todavía no comprueba
+//! colisiones: es una cámara libre, útil para explorar y probar.
 
 use std::f32::consts::FRAC_PI_2;
 
-use crate::math::{Mat4, Vec3};
+use winit::keyboard::KeyCode;
 
-/// Sensibilidad del raton, en radianes por pixel.
+use crate::base::math::{Mat4, Vec3};
+use crate::entrada::Input;
+
+/// Sensibilidad del ratón, en radianes por píxel.
 pub const SENSIBILIDAD: f32 = 0.0022;
 
-/// Limite del pitch para no dar la vuelta a la camara.
+/// Límite del pitch para no dar la vuelta a la cámara.
 const LIMITE_PITCH: f32 = FRAC_PI_2 - 0.01;
 
-pub struct Camera {
+/// Velocidad de la cámara libre, en unidades por segundo.
+const VELOCIDAD: f32 = 7.0;
+/// Velocidad con Shift pulsado.
+const VELOCIDAD_RAPIDA: f32 = 20.0;
+
+pub struct Camara {
     pub posicion: Vec3,
     /// Giro horizontal en radianes. 0 mira hacia -Z.
     pub yaw: f32,
@@ -25,7 +33,7 @@ pub struct Camera {
     pub lejos: f32,
 }
 
-impl Camera {
+impl Camara {
     pub fn new(posicion: Vec3) -> Self {
         Self {
             posicion,
@@ -37,7 +45,7 @@ impl Camera {
         }
     }
 
-    /// Direccion hacia la que mira la camara (incluye la inclinacion).
+    /// Dirección hacia la que mira (incluye la inclinación).
     pub fn adelante(&self) -> Vec3 {
         Vec3::new(
             self.yaw.sin() * self.pitch.cos(),
@@ -46,8 +54,7 @@ impl Camera {
         )
     }
 
-    /// Direccion horizontal de avance, para caminar sin volar al mirar
-    /// arriba o abajo.
+    /// Dirección horizontal de avance, para no volar al mirar arriba.
     pub fn adelante_horizontal(&self) -> Vec3 {
         Vec3::new(self.yaw.sin(), 0.0, -self.yaw.cos())
     }
@@ -56,7 +63,7 @@ impl Camera {
         Vec3::new(self.yaw.cos(), 0.0, self.yaw.sin())
     }
 
-    /// Aplica el movimiento del raton.
+    /// Aplica el movimiento del ratón.
     pub fn girar(&mut self, dx: f32, dy: f32) {
         self.yaw += dx * SENSIBILIDAD;
         self.pitch = (self.pitch - dy * SENSIBILIDAD).clamp(-LIMITE_PITCH, LIMITE_PITCH);
@@ -66,7 +73,7 @@ impl Camera {
         self.posicion = self.posicion + desplazamiento;
     }
 
-    /// Orienta la camara hacia un punto del mundo.
+    /// Orienta la cámara hacia un punto del mundo.
     pub fn mirar_a(&mut self, objetivo: Vec3) {
         let direccion = (objetivo - self.posicion).normalize();
         self.yaw = direccion.x.atan2(-direccion.z);
@@ -74,8 +81,8 @@ impl Camera {
     }
 
     pub fn vista(&self) -> Mat4 {
-        // La base se construye a partir de yaw y pitch, y "arriba" sale del
-        // producto vectorial: nunca degenera, ni mirando casi al cenit.
+        // La base sale de yaw y pitch; "arriba" es un producto vectorial,
+        // así que nunca degenera ni mirando casi al cenit.
         let adelante = self.adelante();
         let derecha = self.derecha();
         let arriba = derecha.cross(adelante);
@@ -87,8 +94,57 @@ impl Camera {
     }
 
     pub fn vista_proyeccion(&self, aspecto: f32) -> Mat4 {
-        // OpenGL multiplica por la izquierda: clip = proyeccion * vista * punto.
+        // OpenGL multiplica por la izquierda: clip = proyección * vista * p.
         self.proyeccion(aspecto).mul(self.vista())
+    }
+}
+
+pub struct Jugador {
+    pub camara: Camara,
+}
+
+impl Jugador {
+    pub fn nuevo(posicion: Vec3) -> Self {
+        Self {
+            camara: Camara::new(posicion),
+        }
+    }
+
+    /// Un paso lógico de control: girar con el ratón y moverse con el
+    /// teclado. `paso` es el tiempo simulado (1/60 s).
+    pub fn actualizar(&mut self, entrada: &mut Input, paso: f32) {
+        let (dx, dy) = entrada.tomar_raton();
+        if dx != 0.0 || dy != 0.0 {
+            self.camara.girar(dx, dy);
+        }
+
+        let mut direccion = Vec3::ZERO;
+        if entrada.abajo(KeyCode::KeyW) {
+            direccion = direccion + self.camara.adelante_horizontal();
+        }
+        if entrada.abajo(KeyCode::KeyS) {
+            direccion = direccion - self.camara.adelante_horizontal();
+        }
+        if entrada.abajo(KeyCode::KeyD) {
+            direccion = direccion + self.camara.derecha();
+        }
+        if entrada.abajo(KeyCode::KeyA) {
+            direccion = direccion - self.camara.derecha();
+        }
+        if entrada.abajo(KeyCode::Space) {
+            direccion.y += 1.0;
+        }
+        if entrada.abajo(KeyCode::ControlLeft) || entrada.abajo(KeyCode::ControlRight) {
+            direccion.y -= 1.0;
+        }
+
+        if direccion.length() > 0.0 {
+            let rapida =
+                entrada.abajo(KeyCode::ShiftLeft) || entrada.abajo(KeyCode::ShiftRight);
+            let velocidad = if rapida { VELOCIDAD_RAPIDA } else { VELOCIDAD };
+            self.camara
+                .mover(direccion.normalize() * (velocidad * paso));
+        }
     }
 }
 
@@ -107,7 +163,7 @@ mod tests {
         salida
     }
 
-    fn distancia_en_vista(cam: &Camera, punto: Vec3) -> f32 {
+    fn distancia_en_vista(cam: &Camara, punto: Vec3) -> f32 {
         let p = transformar(&cam.vista(), punto);
         (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
     }
@@ -115,7 +171,7 @@ mod tests {
     #[test]
     fn la_base_de_la_camara_es_ortogonal() {
         for pitch in [-1.2, -0.4, 0.0, 0.5, 1.55] {
-            let mut cam = Camera::new(Vec3::new(1.0, 2.0, 3.0));
+            let mut cam = Camara::new(Vec3::new(1.0, 2.0, 3.0));
             cam.yaw = 0.8;
             cam.pitch = pitch;
 
@@ -137,7 +193,7 @@ mod tests {
     #[test]
     fn girar_no_acerca_ni_aleja_el_mundo() {
         let punto = Vec3::new(8.0, 8.0, 8.0);
-        let mut cam = Camera::new(Vec3::new(8.0, 22.0, 34.0));
+        let mut cam = Camara::new(Vec3::new(8.0, 22.0, 34.0));
         let referencia = distancia_en_vista(&cam, punto);
 
         for (yaw, pitch) in [(0.0, 0.0), (0.7, 0.3), (2.4, -0.6), (3.0, 1.5), (-1.2, -1.55)] {
@@ -154,11 +210,26 @@ mod tests {
     #[test]
     fn mirar_a_apunta_al_objetivo() {
         let objetivo = Vec3::new(8.0, 8.0, 8.0);
-        let mut cam = Camera::new(Vec3::new(8.0, 22.0, 34.0));
+        let mut cam = Camara::new(Vec3::new(8.0, 22.0, 34.0));
         cam.mirar_a(objetivo);
 
         let p = transformar(&cam.vista(), objetivo);
         assert!(p[0].abs() < 1e-3 && p[1].abs() < 1e-3, "{p:?}");
         assert!(p[2] < 0.0, "el objetivo debe quedar delante: {p:?}");
+    }
+
+    #[test]
+    fn el_jugador_avanza_con_w() {
+        let mut jugador = Jugador::nuevo(Vec3::new(0.0, 0.0, 0.0));
+        let mut entrada = Input::new();
+        entrada.presionar(KeyCode::KeyW);
+
+        jugador.actualizar(&mut entrada, 1.0 / 60.0);
+        assert!(jugador.camara.posicion.z < 0.0);
+
+        jugador.camara.posicion = Vec3::ZERO;
+        jugador.camara.yaw = FRAC_PI_2;
+        jugador.actualizar(&mut entrada, 1.0 / 60.0);
+        assert!(jugador.camara.posicion.x > 0.0);
     }
 }

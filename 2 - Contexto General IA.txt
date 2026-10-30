@@ -88,18 +88,32 @@ Montworld/
   .gitignore
   run.sh                Compilar y ejecutar en escritorio
   src/
-    main.rs             Punto de entrada y bucle de eventos
-    app.rs              Ciclo de vida y bucle principal (update/render)
-    clock.rs            Pasos fijos a 60 Hz y medición de FPS
-    gfx.rs              Ventana, contexto OpenGL, shaders y escena
-    camera.rs           Cámara en primera persona (vista y proyección)
-    input.rs            Teclas pulsadas y delta del ratón
-    math.rs             Vec3 y Mat4 propios (con tests)
+    main.rs             Punto de entrada: crea el event loop y App
+    app.rs              Capa winit: ventana, eventos, captura de ratón y
+                        sincronización de mallas con la simulación
+    juego.rs            Simulación: mundo + jugador + reglas (romper y
+                        colocar) + carga de chunks. No conoce OpenGL
+    jugador.rs          Cámara en primera persona y su movimiento
+    entrada.rs          Teclas pulsadas y delta del ratón
+    base/
+      mod.rs            Utilidades base
+      math.rs           Vec3 y Mat4 propios (con tests)
+      clock.rs          Pasos fijos a 60 Hz y medición de FPS
+    render/
+      mod.rs            Render: programa, mallas y dibujo del frame
+      contexto.rs       Ventana + contexto OpenGL + superficie
+      shader.rs         Compilación de shaders y cabecera por plataforma
+      malla.rs          Malla en GPU (VAO/VBO)
+      shaders/
+        bloque.vert     Shader de vértices del mundo
+        bloque.frag     Shader de fragmentos del mundo
     world/
       mod.rs            Punto de entrada del mundo
       block.rs          Tipos de bloque y colores
-      chunk.rs          Chunk 16×16×16 y generación de terreno
-      mundo.rs          Rejilla de chunks, carga/descarga y mallas
+      chunk.rs          Chunk 16×16×16 y almacenamiento de bloques
+      generacion.rs     Ruido y altura del terreno
+      mundo.rs          Rejilla de chunks, carga/descarga, mallas y
+                        seguimiento de chunks sucios
       meshing.rs        Caras visibles y construcción de la malla
       raycast.rs        Rayo de vóxeles para romper y colocar
   assets/
@@ -110,14 +124,34 @@ Lanzador: ~/Escritorio/montworld.desktop (copia en
 ~/.local/share/applications para el menú).
 
 ------------------------------------------------------------
-7. CONVENCIONES
+7. ARQUITECTURA Y CONVENCIONES
 ------------------------------------------------------------
+Arquitectura en capas. Dependencias permitidas (una capa solo puede
+usar las de abajo):
+
+  app  (winit, eventos, ventana)
+    -> juego  -> jugador, entrada, world, base
+    -> render -> base
+  render NO conoce el mundo: recibe mallas ya construidas.
+  world NO conoce OpenGL, winit ni la ventana.
+  juego NO conoce OpenGL ni winit: es simulación pura.
+  base NO depende del proyecto.
+
+Reglas de diseño:
+- Cada archivo tiene una responsabilidad y un nombre claro.
+  Nada de archivos gigantes ni de mezclar plataforma con lógica.
+- Un módulo nuevo empieza eligiendo capa: si es una regla del juego
+  va en `juego`; si es dato o generación, en `world`; si es dibujo,
+  en `render`; si es ventana o eventos, en `app`.
+- Los shaders viven en `render/shaders/*.vert` y `*.frag`, sin la
+  línea `#version` (la añade `render/shader.rs` según la plataforma).
+- Los cambios de bloques marcan chunks sucios en `world::Mundo`;
+  `app` es quien reconstruye y sube esas mallas a la GPU.
+
+Convenciones:
 - Documentación en español, con prefijo numérico y orden fijo.
-- Un módulo por responsabilidad (ventana, input, render, mundo,
-  jugador, cámara). Nada de archivos gigantes.
+- Identificadores y comentarios del código en español.
 - Nombres de archivos de assets en minúsculas y con guiones bajos.
-- Código y nombres de identificadores: pendiente de definir
-  (propuesta: inglés para el código, comentarios en español).
 - No incluir en el código, nombres de archivos ni documentación
   referencias a juegos comerciales ni a sus nombres.
 
@@ -162,3 +196,8 @@ usuario.
 v0.0.5: mundo 5×5 chunks con carga dinámica; corregido el meshing
 (coordenadas locales apilaban los chunks). 60 fps en el PC,
 confirmado por el usuario.
+v0.0.6: reestructuración modular (app, juego, jugador, entrada, base,
+render, world) con shaders en archivos. Probada por el usuario sin
+cambios de comportamiento.
+Añadida la regla 6 (modularidad obligatoria) y la sección 7 de
+arquitectura por capas.

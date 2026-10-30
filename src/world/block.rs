@@ -3,7 +3,7 @@
 //! Se guardan como un byte para que un chunk ocupe poco memoria. El valor
 //! 0 siempre es aire.
 
-use crate::math::Vec3;
+use crate::base::math::Vec3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]

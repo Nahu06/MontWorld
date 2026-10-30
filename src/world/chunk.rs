@@ -1,12 +1,10 @@
-//! Chunk: una porcion cubica del mundo.
+//! Chunk: una porción cúbica del mundo.
 //!
 //! Se guarda como una lista plana de bloques de `LADO^3` posiciones. Las
 //! coordenadas internas van de 0 a `LADO - 1`.
-//!
-//! La generacion usa coordenadas globales, de modo que dos chunks vecinos
-//! encajan sin costuras.
 
 use super::block::Bloque;
+use super::generacion;
 
 /// Bloques por lado del chunk. Al ser potencia de dos, las cuentas son
 /// baratas y el chunk ocupa 4096 bloques (4 KiB).
@@ -51,7 +49,7 @@ impl Chunk {
 
         for z in 0..LADO_I {
             for x in 0..LADO_I {
-                let altura = altura_terreno(cx * LADO_I + x, cz * LADO_I + z);
+                let altura = generacion::altura(cx * LADO_I + x, cz * LADO_I + z);
 
                 for y in 0..altura {
                     let bloque = if y == altura - 1 {
@@ -69,50 +67,6 @@ impl Chunk {
 
         chunk
     }
-}
-
-/// Altura de la superficie en coordenadas globales. Va de 3 a 13 para que
-/// quepa de sobra en los 16 bloques de alto.
-fn altura_terreno(x: i32, z: i32) -> i32 {
-    let x = x as f32;
-    let z = z as f32;
-    let altura = 8.0 + ruido_suave(x, z, 26.0) * 3.0 + ruido_suave(x, z, 9.0) * 1.2;
-    altura.round().clamp(3.0, 13.0) as i32
-}
-
-/// Ruido de valor con interpolacion suave. Es determinista y solo depende
-/// de las coordenadas, asi que los chunks vecinos coinciden en el borde.
-fn ruido_suave(x: f32, z: f32, escala: f32) -> f32 {
-    let fx = x / escala;
-    let fz = z / escala;
-
-    let x0 = fx.floor();
-    let z0 = fz.floor();
-    let tx = suavizar(fx - x0);
-    let tz = suavizar(fz - z0);
-
-    let (xi, zi) = (x0 as i32, z0 as i32);
-    let a = ruido_entero(xi, zi);
-    let b = ruido_entero(xi + 1, zi);
-    let c = ruido_entero(xi, zi + 1);
-    let d = ruido_entero(xi + 1, zi + 1);
-
-    let arriba = a + (b - a) * tx;
-    let abajo = c + (d - c) * tx;
-    arriba + (abajo - arriba) * tz
-}
-
-/// Curva de suavizado: 3t² - 2t³.
-fn suavizar(t: f32) -> f32 {
-    t * t * (3.0 - 2.0 * t)
-}
-
-/// Valor pseudoaleatorio en [-1, 1] para una celda de la rejilla de ruido.
-fn ruido_entero(x: i32, z: i32) -> f32 {
-    let mut h = x.wrapping_mul(374_761_393).wrapping_add(z.wrapping_mul(668_265_263));
-    h = (h ^ (h >> 13)).wrapping_mul(1_274_126_177);
-    let unidad = ((h ^ (h >> 16)) & 0xffff) as f32 / 65_535.0;
-    unidad * 2.0 - 1.0
 }
 
 #[cfg(test)]
@@ -139,10 +93,10 @@ mod tests {
     #[test]
     fn la_generacion_usa_coordenadas_globales() {
         // El chunk (1, 0) empieza en la coordenada global x = 16: su
-        // columna local 0 debe coincidir con la altura calculada alli.
+        // columna local 0 debe coincidir con la altura calculada allí.
         let chunk = Chunk::generar(1, 0);
         for z in 0..LADO_I {
-            let altura = altura_terreno(LADO_I, z);
+            let altura = generacion::altura(LADO_I, z);
             assert!(!chunk.bloque(0, altura - 1, z).es_aire());
             if altura < LADO_I {
                 assert!(chunk.bloque(0, altura, z).es_aire());

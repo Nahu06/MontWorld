@@ -128,7 +128,7 @@ fn empujar_cara(
     y: i32,
     z: i32,
     cara: &Cara,
-    color: crate::math::Vec3,
+    color: crate::base::math::Vec3,
 ) {
     let base = [
         origen[0] + x as f32,

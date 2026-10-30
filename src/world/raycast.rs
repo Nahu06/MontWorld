@@ -5,7 +5,7 @@
 //! solido. Es la forma barata de saber a que bloque apunta la camara, sin
 //! necesidad de mallas de colision.
 
-use crate::math::Vec3;
+use crate::base::math::Vec3;
 
 use super::block::Bloque;
 
@@ -38,9 +38,9 @@ where
 
     // Distancia entre cruces de celda en cada eje.
     let delta = [
-        if paso[0] != 0 { (1.0 / dir.x).abs() } else { f32::INFINITY },
-        if paso[1] != 0 { (1.0 / dir.y).abs() } else { f32::INFINITY },
-        if paso[2] != 0 { (1.0 / dir.z).abs() } else { f32::INFINITY },
+        if paso[0] != 0 { (1.0f32 / dir.x).abs() } else { f32::INFINITY },
+        if paso[1] != 0 { (1.0f32 / dir.y).abs() } else { f32::INFINITY },
+        if paso[2] != 0 { (1.0f32 / dir.z).abs() } else { f32::INFINITY },
     ];
 
     // Distancia hasta el primer cruce de celda.

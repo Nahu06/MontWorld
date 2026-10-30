@@ -94,6 +94,10 @@ v0.0.4 - 2026-10-30 - Romper y colocar bloques con raycast de vóxeles,
 v0.0.5 - 2026-10-30 - Mundo de 5×5 chunks con generación continua,
          carga/descarga alrededor de la cámara y una malla por chunk.
          60 fps confirmados en el PC.
+v0.0.6 - 2026-10-30 - Reestructuración modular: capas app, juego,
+         jugador, entrada, base, render y world; shaders en archivos y
+         seguimiento de chunks sucios dentro del mundo. Probada por el
+         usuario sin cambios de comportamiento.
 
 ------------------------------------------------------------
 REGISTRO
@@ -117,4 +121,9 @@ REGISTRO
              v0.0.5: mundo de 5×5 chunks con generación continua y
              carga/descarga. Corregido el meshing (usaba coordenadas
              locales y apilaba los chunks). 60 fps en el PC.
+             Refactor modular (v0.0.6): app / juego / jugador / entrada /
+             base / render / world, shaders en archivos y chunks sucios
+             gestionados por el mundo. Probado por el usuario: todo
+             funciona igual.
+             Nueva regla 6: modularidad obligatoria.
              Siguiente paso: atlas de texturas o guardado del mundo.

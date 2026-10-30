@@ -5,6 +5,7 @@
 
 pub mod block;
 pub mod chunk;
+pub mod generacion;
 pub mod meshing;
 pub mod mundo;
 pub mod raycast;

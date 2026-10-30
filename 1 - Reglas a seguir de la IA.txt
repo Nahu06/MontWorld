@@ -49,5 +49,25 @@ Proyecto: Montworld
      cambio intermedio.
    - Anotar en el roadmap qué incluye cada versión publicada.
 
+6) MODULARIDAD OBLIGATORIA
+   El proyecto se mantiene modular en todo momento.
+
+   - Cada archivo tiene una sola responsabilidad y un nombre claro.
+   - Antes de escribir código, decidir la capa: app, juego, jugador,
+     entrada, base, render o world. Si no encaja en ninguna, preguntar.
+   - Dependencias permitidas:
+       app    -> juego, render
+       juego  -> jugador, entrada, world, base
+       render -> base, jugador (solo la cámara)
+       world  -> base
+       base   -> nada del proyecto
+   - `juego` no conoce OpenGL ni winit. `render` no conoce el mundo.
+     `world` no conoce GL ni la ventana.
+   - Nada de archivos gigantes ni de mezclar plataforma con lógica.
+   - Los shaders van en `render/shaders/*.vert` y `*.frag`, sin la
+     línea `#version`.
+   - Si un cambio obliga a romper esta estructura, avisar y proponer
+     una alternativa antes de hacerlo.
+
 ============================================================
 Estas reglas aplican a cualquier IA que trabaje en el proyecto.
