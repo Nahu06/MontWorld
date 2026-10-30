@@ -33,9 +33,9 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 Fase: prototipo (Fase 1 en curso)
 Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con generación
 continua y carga dinámica, jugador con gravedad, colisiones, salto y
-sprint, romper/colocar bloques con raycast y mira, y guardado/carga de
-la partida con autoguardado. Va a 60 fps en el PC de referencia.
-No funciona / falta: texturas, inventario/barra de bloques, controles
+sprint, romper/colocar con barra de 4 bloques, y guardado/carga de la
+partida con autoguardado. Va a 60 fps en el PC de referencia.
+No funciona / falta: texturas, lecho rocoso/reaparición, controles
 táctiles y build de Android.
 
 ------------------------------------------------------------
@@ -180,14 +180,22 @@ de asumir.
 10. CONTROLES Y FÍSICA
 ------------------------------------------------------------
 Ratón: mirar. WASD: caminar. Shift: correr. Espacio: saltar.
-Clic izquierdo: romper bloque. Clic derecho: colocar piedra.
+Clic izquierdo: romper bloque. Clic derecho: colocar el bloque
+seleccionado. Teclas 1-4: elegir bloque de la barra. Rueda del
+ratón: pasar al bloque siguiente/anterior.
 Esc: liberar el ratón (otra vez Esc cierra el juego).
+
+Barra rápida (v0.0.9): 4 casillas en la parte inferior, con el color
+de cada bloque; la seleccionada lleva marco blanco. Orden:
+1 hierba, 2 tierra, 3 piedra (por defecto), 4 arena.
 
 Física actual (v0.0.7):
 - Cuerpo en caja de 0.6 × 1.8 bloques; la cámara va a 1.62 de alto.
 - Gravedad 28 bloques/s², salto de 8.5, caída máxima 40.
 - Colisiones resueltas eje por eje contra los bloques del mundo.
 - Ya no se vuela libremente: para explorar hay que caminar o saltar.
+- No se puede colocar un bloque dentro del cuerpo (se comprueba la
+  caja completa). Si el jugador queda atrapado, se le libera subiendo.
 
 ------------------------------------------------------------
 11. GUARDADO
@@ -236,3 +244,5 @@ v0.0.7: gravedad, colisiones AABB, salto y sprint; controles y física
 documentados en la sección 10. Probado por el usuario.
 v0.0.8: guardado y carga de partida (sección 11). Probado por el
 usuario: conserva posición y bloques al reabrir.
+v0.0.9: barra de bloques y bloqueo de colocación dentro del cuerpo.
+Probado por el usuario.

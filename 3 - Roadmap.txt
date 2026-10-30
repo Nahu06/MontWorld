@@ -54,7 +54,8 @@ FASE 2 - CONTENIDO
 [ ] Varios tipos de bloques y su atlas
 [ ] Generación de terreno por ruido (relieve, cuevas)
 [ ] Ciclo día/noche e iluminación
-[ ] Inventario / barra rápida de bloques
+[x] Inventario / barra rápida de bloques
+    (barra de 4 bloques con teclas 1-4 y rueda, 2026-10-30, probada)
 [ ] [Por definir con el usuario: crafteo, supervivencia, criaturas,
     multijugador]
 
@@ -104,6 +105,10 @@ v0.0.7 - 2026-10-30 - Gravedad, colisiones AABB contra bloques, salto
          y sprint; el jugador camina por el mundo en vez de volar.
 v0.0.8 - 2026-10-30 - Guardado y carga de la partida en binario propio:
          posición, cámara y bloques modificados; autoguardado cada 20 s.
+v0.0.9 - 2026-10-30 - Barra rápida de 4 bloques (teclas 1-4 y rueda
+         del ratón), con indicador en pantalla y colocación del bloque
+         elegido. Corregido: ya no se pueden colocar bloques dentro del
+         cuerpo del jugador y hay desatasco de seguridad.
 
 ------------------------------------------------------------
 REGISTRO
@@ -136,4 +141,7 @@ REGISTRO
              el usuario: camina y choca correctamente.
              v0.0.8: guardado/carga binario con autoguardado. Probado
              por el usuario: conserva posición y bloques.
-             Siguiente paso: atlas de texturas o barra de bloques.
+             v0.0.9: barra de bloques (1-4 y rueda) y bloqueo de
+             colocación dentro del cuerpo. Probado por el usuario.
+             Siguiente paso: evitar la caída al vacío (lecho rocoso y
+             reaparición).

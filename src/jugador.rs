@@ -194,6 +194,10 @@ impl Jugador {
         }
         self.velocidad.y = (self.velocidad.y - GRAVEDAD * paso).max(-CAIDA_MAXIMA);
 
+        // Si por algún motivo quedó dentro de un bloque (una partida
+        // vieja, un bloque colocado encima), se libera antes de moverse.
+        self.desatascar(solido);
+
         // Movimiento resuelto eje por eje para poder deslizar por paredes.
         self.mover_eje(0, paso, solido);
         self.mover_eje(2, paso, solido);
@@ -221,6 +225,31 @@ impl Jugador {
             self.en_suelo = self.velocidad.y < 0.0;
         }
         self.velocidad = self.velocidad.con_eje(eje, 0.0);
+    }
+
+    /// Indica si el cuerpo ocuparía la celda `(x, y, z)`.
+    ///
+    /// Se usa para no permitir colocar bloques dentro del jugador. Tocar
+    /// el borde no cuenta: se puede colocar justo debajo de los pies.
+    pub fn ocupa(&self, x: i32, y: i32, z: i32) -> bool {
+        let min = self.posicion + Vec3::new(-ANCHO * 0.5, 0.0, -ANCHO * 0.5);
+        let max = self.posicion + Vec3::new(ANCHO * 0.5, ALTO, ANCHO * 0.5);
+
+        min.x < x as f32 + 1.0 - MARGEN
+            && max.x > x as f32 + MARGEN
+            && min.y < y as f32 + 1.0 - MARGEN
+            && max.y > y as f32 + MARGEN
+            && min.z < z as f32 + 1.0 - MARGEN
+            && max.z > z as f32 + MARGEN
+    }
+
+    /// Si el cuerpo está dentro de bloques, lo sube hasta sacarlo.
+    fn desatascar(&mut self, solido: &dyn Fn(i32, i32, i32) -> bool) {
+        let mut intentos = 0;
+        while self.colisiona(solido) && intentos < 12 {
+            self.posicion.y += 0.25;
+            intentos += 1;
+        }
     }
 
     /// Comprueba si la caja del cuerpo se solapa con algún bloque sólido.
@@ -357,6 +386,30 @@ mod tests {
 
         avanzar(&mut jugador, &mut entrada, 120, &suelo);
         assert!(jugador.en_suelo, "debería volver a caer");
+    }
+
+    #[test]
+    fn el_cuerpo_ocupa_sus_celdas_pero_no_la_de_debajo() {
+        let jugador = Jugador::nuevo(Vec3::new(0.5, 3.0, 0.5));
+        // Pies y torso dentro de la misma columna.
+        assert!(jugador.ocupa(0, 3, 0));
+        assert!(jugador.ocupa(0, 4, 0));
+        // La celda del suelo está justo debajo de los pies.
+        assert!(!jugador.ocupa(0, 2, 0));
+        // Al lado no ocupa nada.
+        assert!(!jugador.ocupa(1, 3, 0));
+    }
+
+    #[test]
+    fn si_queda_atrapado_sale_hacia_arriba() {
+        // Suelo y un bloque encima del jugador, a su misma altura.
+        let atrapado = |x: i32, y: i32, z: i32| y < 3 || (x == 0 && z == 0 && y == 3);
+        let mut jugador = Jugador::nuevo(Vec3::new(0.5, 3.0, 0.5));
+        let mut entrada = Input::new();
+
+        assert!(jugador.colisiona(&atrapado));
+        jugador.actualizar(&mut entrada, 1.0 / 60.0, &atrapado);
+        assert!(!jugador.colisiona(&atrapado), "debería haber salido del bloque");
     }
 
     #[test]

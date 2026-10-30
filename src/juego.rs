@@ -15,6 +15,14 @@ use crate::world::{Mundo, generacion, raycast};
 /// Alcance del rayo para romper y colocar bloques, en bloques.
 const ALCANCE: f32 = 6.0;
 
+/// Bloques disponibles en la barra rápida, en orden (teclas 1 a 4).
+const BLOQUES_BARRA: [Bloque; 4] = [
+    Bloque::Hierba,
+    Bloque::Tierra,
+    Bloque::Piedra,
+    Bloque::Arena,
+];
+
 /// Cambios de chunks pendientes de aplicar en la GPU.
 #[derive(Default)]
 pub struct Cambios {
@@ -28,6 +36,8 @@ pub struct Juego {
     /// Chunk en el que está la cámara, para saber cuándo recargar.
     centro: Option<(i32, i32)>,
     cambios: Cambios,
+    /// Índice del bloque seleccionado en la barra rápida.
+    seleccion: usize,
 }
 
 impl Juego {
@@ -42,6 +52,7 @@ impl Juego {
             )),
             centro: None,
             cambios: Cambios::default(),
+            seleccion: 2, // piedra por defecto
         }
     }
 
@@ -113,6 +124,35 @@ impl Juego {
         self.mundo.tomar_sucios()
     }
 
+    /// Elige un bloque de la barra por su índice (0 a 3).
+    pub fn seleccionar(&mut self, indice: usize) {
+        self.seleccion = indice.min(BLOQUES_BARRA.len() - 1);
+    }
+
+    /// Pasa al bloque anterior o siguiente de la barra.
+    pub fn ciclar_seleccion(&mut self, adelante: bool) {
+        let total = BLOQUES_BARRA.len();
+        self.seleccion = if adelante {
+            (self.seleccion + 1) % total
+        } else {
+            (self.seleccion + total - 1) % total
+        };
+    }
+
+    pub fn seleccion(&self) -> usize {
+        self.seleccion
+    }
+
+    pub fn bloque_seleccionado(&self) -> Bloque {
+        BLOQUES_BARRA[self.seleccion]
+    }
+
+    /// Colores de los bloques de la barra, para que el render los dibuje
+    /// sin conocer los tipos de bloque.
+    pub fn colores_barra(&self) -> [Vec3; 4] {
+        BLOQUES_BARRA.map(|bloque| bloque.color())
+    }
+
     /// Quita el bloque al que apunta la mira. Devuelve si hubo cambio.
     pub fn romper(&mut self) -> bool {
         let Some(impacto) = self.apuntar() else {
@@ -135,12 +175,9 @@ impl Juego {
 
         let [x, y, z] = raycast::vecino(&impacto);
 
-        // No colocar un bloque donde está el jugador.
-        let p = self.jugador.camara.posicion;
-        let ocupada = p.x.floor() as i32 == x
-            && p.y.floor() as i32 == y
-            && p.z.floor() as i32 == z;
-        if ocupada {
+        // No colocar un bloque dentro del cuerpo del jugador: se quedaría
+        // atrapado. Se comprueba la caja completa, no solo la cámara.
+        if self.jugador.ocupa(x, y, z) {
             return false;
         }
 
@@ -148,7 +185,7 @@ impl Juego {
             return false;
         }
 
-        self.mundo.poner(x, y, z, Bloque::Piedra)
+        self.mundo.poner(x, y, z, self.bloque_seleccionado())
     }
 
     fn apuntar(&self) -> Option<raycast::Impacto> {
@@ -169,6 +206,15 @@ mod tests {
         juego
     }
 
+    /// Coloca al jugador sobre el terreno mirando al suelo.
+    fn mirar_al_suelo(juego: &mut Juego, pies: f32) {
+        juego.jugador.posicion = Vec3::new(8.5, pies, 8.5);
+        juego.jugador.velocidad = Vec3::ZERO;
+        juego.jugador.sincronizar_camara();
+        juego.jugador.camara.yaw = 0.0;
+        juego.jugador.camara.pitch = -1.5;
+    }
+
     #[test]
     fn al_arrancar_se_cargan_los_chunks_alrededor() {
         let mut juego = juego_con_bloque();
@@ -185,12 +231,55 @@ mod tests {
 
         // Mirar hacia abajo desde un par de bloques sobre el terreno.
         let altura = crate::world::generacion::altura(8, 8);
-        juego.jugador.camara.posicion = Vec3::new(8.5, (altura + 2) as f32, 8.5);
-        juego.jugador.camara.yaw = 0.0;
-        juego.jugador.camara.pitch = -1.5;
+        mirar_al_suelo(&mut juego, (altura + 2) as f32);
 
         assert!(juego.romper());
         assert!(!juego.tomar_sucios().is_empty());
+    }
+
+    #[test]
+    fn colocar_usa_el_bloque_seleccionado() {
+        let mut juego = juego_con_bloque();
+        juego.tomar_cambios();
+
+        let altura = crate::world::generacion::altura(8, 8);
+        mirar_al_suelo(&mut juego, (altura + 2) as f32);
+
+        juego.seleccionar(0); // hierba
+        assert_eq!(juego.bloque_seleccionado(), Bloque::Hierba);
+        assert!(juego.colocar());
+
+        assert!(
+            juego.mundo.cambios().values().any(|b| *b == Bloque::Hierba),
+            "debería haberse colocado hierba"
+        );
+    }
+
+    #[test]
+    fn la_seleccion_cicla_en_los_dos_sentidos() {
+        let mut juego = Juego::nuevo();
+        juego.seleccionar(0);
+        juego.ciclar_seleccion(false);
+        assert_eq!(juego.seleccion(), 3);
+        juego.ciclar_seleccion(true);
+        assert_eq!(juego.seleccion(), 0);
+
+        juego.seleccionar(99);
+        assert_eq!(juego.seleccion(), 3);
+    }
+
+    #[test]
+    fn no_se_puede_colocar_un_bloque_dentro_del_jugador() {
+        let mut juego = juego_con_bloque();
+        juego.tomar_cambios();
+
+        // De pie sobre el terreno y mirando al suelo: el bloque que se
+        // colocaría quedaría en la celda de los pies.
+        let altura = crate::world::generacion::altura(8, 8);
+        mirar_al_suelo(&mut juego, altura as f32);
+
+        assert!(!juego.colocar(), "no debería colocar dentro del jugador");
+        assert!(juego.mundo.cambios().is_empty());
     }
 
     #[test]
@@ -198,9 +287,7 @@ mod tests {
         let mut juego = juego_con_bloque();
         juego.tomar_cambios();
         let altura = crate::world::generacion::altura(8, 8);
-        juego.jugador.camara.posicion = Vec3::new(8.5, (altura + 2) as f32, 8.5);
-        juego.jugador.camara.yaw = 0.0;
-        juego.jugador.camara.pitch = -1.5;
+        mirar_al_suelo(&mut juego, (altura + 2) as f32);
 
         assert!(juego.colocar());
         assert!(!juego.tomar_sucios().is_empty());

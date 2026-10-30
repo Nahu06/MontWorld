@@ -7,9 +7,11 @@
 use std::path::PathBuf;
 
 use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
+use winit::event::{
+    DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta, WindowEvent,
+};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey, PhysicalKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 use winit::window::{CursorGrabMode, WindowId};
 
 use crate::base::clock::{Clock, PASO};
@@ -53,6 +55,16 @@ impl App {
                 partida.cambios.len()
             ),
             Err(err) => eprintln!("Montworld: no se pudo guardar la partida: {err}"),
+        }
+    }
+
+    /// Reconstruye la barra de bloques con la selección actual.
+    fn actualizar_barra(&mut self) {
+        if let Some(render) = self.render.as_mut() {
+            let colores = self.juego.colores_barra();
+            if let Err(err) = render.actualizar_barra(&colores, self.juego.seleccion()) {
+                eprintln!("Montworld: no se pudo actualizar la barra: {err}");
+            }
         }
     }
 
@@ -163,6 +175,17 @@ impl App {
     }
 }
 
+/// Teclas 1 a 4: índice de la barra rápida.
+fn indice_de_barra(codigo: KeyCode) -> Option<usize> {
+    match codigo {
+        KeyCode::Digit1 => Some(0),
+        KeyCode::Digit2 => Some(1),
+        KeyCode::Digit3 => Some(2),
+        KeyCode::Digit4 => Some(3),
+        _ => None,
+    }
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.render.is_some() {
@@ -192,6 +215,7 @@ impl ApplicationHandler for App {
 
                 self.juego.reiniciar_streaming();
                 self.aplicar_cambios();
+                self.actualizar_barra();
             }
             Err(err) => {
                 eprintln!("Montworld: no se pudo crear la ventana o el contexto GL: {err}");
@@ -239,6 +263,9 @@ impl ApplicationHandler for App {
                                 } else {
                                     event_loop.exit();
                                 }
+                            } else if let Some(indice) = indice_de_barra(codigo) {
+                                self.juego.seleccionar(indice);
+                                self.actualizar_barra();
                             } else {
                                 self.entrada.presionar(codigo);
                             }
@@ -267,10 +294,22 @@ impl ApplicationHandler for App {
                 }
             }
 
+            WindowEvent::MouseWheel { delta, .. } if self.entrada.capturado => {
+                let desplazamiento = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(p) => p.y as f32,
+                };
+                if desplazamiento != 0.0 {
+                    self.juego.ciclar_seleccion(desplazamiento < 0.0);
+                    self.actualizar_barra();
+                }
+            }
+
             WindowEvent::Resized(size) => {
                 if let Some(render) = self.render.as_mut() {
                     render.redimensionar(size.width, size.height);
                 }
+                self.actualizar_barra();
             }
             WindowEvent::RedrawRequested => self.frame(),
             _ => {}
