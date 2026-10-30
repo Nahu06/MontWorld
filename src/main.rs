@@ -4,8 +4,11 @@
 //! que se encarga de la ventana, el contexto grafico y el bucle principal.
 
 mod app;
+mod camera;
 mod clock;
 mod gfx;
+mod input;
+mod math;
 
 use std::error::Error;
 

@@ -40,5 +40,14 @@ Proyecto: Montworld
    - Si el usuario pide el APK, se compila, se entrega y se anota la
      fecha en el roadmap.
 
+5) VERSIONES Y COMMITS
+   Repositorio: https://github.com/Nahu06/MontWorld.git
+
+   - Cada commit se sube con el nombre de la versión como mensaje,
+     sin texto extra: "v0.0.1", "v0.0.2", "v0.0.3", ...
+   - Se sube un commit por versión terminada y probada, no por cada
+     cambio intermedio.
+   - Anotar en el roadmap qué incluye cada versión publicada.
+
 ============================================================
 Estas reglas aplican a cualquier IA que trabaje en el proyecto.

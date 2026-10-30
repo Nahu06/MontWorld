@@ -30,11 +30,12 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 ------------------------------------------------------------
 3. ESTADO GENERAL
 ------------------------------------------------------------
-Fase: prototipo (inicio de Fase 1)
-Funciona hoy: ventana con contexto OpenGL 3.3, bucle con pasos fijos a
-60 Hz, contador de FPS en el título, lanzador de escritorio y vsync.
-No funciona / falta: cámara, mundo, chunks, bloques y controles; no
-hay repositorio Git.
+Fase: prototipo (Fase 1 en curso)
+Funciona hoy: ventana con OpenGL 3.3, bucle a 60 Hz con vsync, cámara
+libre en primera persona (ratón + WASD), escena de prueba con cubos y
+lanzador de escritorio.
+No funciona / falta: mundo de vóxeles, chunks, texturas, romper y
+colocar bloques, controles táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -52,7 +53,9 @@ usuario lo pide expresamente (ver regla 4 de "1 - Reglas a seguir de
 la IA.txt"). El desarrollo y la verificación diaria se hacen en
 escritorio; no se compila Android por iniciativa propia.
 Editor / IDE: sin definir.
-Control de versiones: sin definir (aún no hay repositorio Git).
+Control de versiones: Git. Repositorio:
+https://github.com/Nahu06/MontWorld.git (rama main). Cada commit
+se nombra con la versión: v0.0.1, v0.0.2, ...
 Entorno de desarrollo: Linux, sesión X11.
 
 ------------------------------------------------------------
@@ -87,7 +90,10 @@ Montworld/
     main.rs             Punto de entrada y bucle de eventos
     app.rs              Ciclo de vida y bucle principal (update/render)
     clock.rs            Pasos fijos a 60 Hz y medición de FPS
-    gfx.rs              Ventana, contexto OpenGL y presentación
+    gfx.rs              Ventana, contexto OpenGL, shaders y escena
+    camera.rs           Cámara en primera persona (vista y proyección)
+    input.rs            Teclas pulsadas y delta del ratón
+    math.rs             Vec3 y Mat4 propios (con tests)
   assets/
     icono.png           Icono del lanzador
   target/               Compilación (ignorada por Git)
@@ -139,3 +145,5 @@ Añadida la política de build Android: el APK solo se compila cuando
 el usuario lo pide expresamente.
 Probado en escritorio: ventana + contexto OpenGL + bucle a 60 fps
 (confirmado por el usuario). Estructura real de carpetas anotada.
+v0.0.2: cámara en primera persona y escena de prueba probadas y
+confirmadas por el usuario.

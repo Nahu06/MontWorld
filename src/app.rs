@@ -1,20 +1,29 @@
 //! Ciclo de vida de la aplicacion y bucle principal.
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::{Key, NamedKey};
-use winit::window::WindowId;
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
+use winit::window::{CursorGrabMode, WindowId};
 
-use crate::clock::Clock;
+use crate::camera::Camera;
+use crate::clock::{Clock, PASO};
 use crate::gfx::Gfx;
+use crate::input::Input;
+use crate::math::Vec3;
+
+/// Velocidad de la camara libre, en unidades por segundo.
+const VELOCIDAD: f32 = 7.0;
+/// Velocidad con Shift pulsado.
+const VELOCIDAD_RAPIDA: f32 = 20.0;
 
 pub struct App {
     gfx: Option<Gfx>,
     clock: Clock,
-    /// Ultimo valor entero de FPS puesto en el titulo, para no reescribirlo
-    /// en cada frame.
-    fps_mostrados: u32,
+    input: Input,
+    camara: Camera,
+    /// Tiempo acumulado desde el ultimo cambio de titulo.
+    tiempo_titulo: f32,
 }
 
 impl App {
@@ -22,14 +31,70 @@ impl App {
         Self {
             gfx: None,
             clock: Clock::new(),
-            fps_mostrados: 0,
+            input: Input::new(),
+            camara: Camera::new(Vec3::new(0.0, 2.0, 8.0)),
+            tiempo_titulo: 0.0,
         }
+    }
+
+    /// Captura el raton para mirar con el. Si el sistema no permite
+    /// bloquearlo, se conforma con confinarlo a la ventana.
+    fn capturar_raton(&mut self) {
+        if let Some(gfx) = self.gfx.as_ref() {
+            let ventana = gfx.window();
+            let _ = ventana
+                .set_cursor_grab(CursorGrabMode::Locked)
+                .or_else(|_| ventana.set_cursor_grab(CursorGrabMode::Confined));
+            ventana.set_cursor_visible(false);
+        }
+        self.input.capturado = true;
+        self.input.soltar_todo();
+    }
+
+    fn liberar_raton(&mut self) {
+        if let Some(gfx) = self.gfx.as_ref() {
+            let ventana = gfx.window();
+            let _ = ventana.set_cursor_grab(CursorGrabMode::None);
+            ventana.set_cursor_visible(true);
+        }
+        self.input.capturado = false;
+        self.input.soltar_todo();
     }
 
     /// Un paso logico de simulacion (1/60 s de juego).
     fn update(&mut self) {
-        // Todavia no hay entidades: aqui iran el jugador, el mundo y la
-        // fisica.
+        let (dx, dy) = self.input.tomar_raton();
+        if dx != 0.0 || dy != 0.0 {
+            self.camara.girar(dx, dy);
+        }
+
+        let mut direccion = Vec3::ZERO;
+        if self.input.abajo(KeyCode::KeyW) {
+            direccion = direccion + self.camara.adelante_horizontal();
+        }
+        if self.input.abajo(KeyCode::KeyS) {
+            direccion = direccion - self.camara.adelante_horizontal();
+        }
+        if self.input.abajo(KeyCode::KeyD) {
+            direccion = direccion + self.camara.derecha();
+        }
+        if self.input.abajo(KeyCode::KeyA) {
+            direccion = direccion - self.camara.derecha();
+        }
+        if self.input.abajo(KeyCode::Space) {
+            direccion.y += 1.0;
+        }
+        if self.input.abajo(KeyCode::ControlLeft) || self.input.abajo(KeyCode::ControlRight) {
+            direccion.y -= 1.0;
+        }
+
+        if direccion.length() > 0.0 {
+            let rapida = self.input.abajo(KeyCode::ShiftLeft)
+                || self.input.abajo(KeyCode::ShiftRight);
+            let velocidad = if rapida { VELOCIDAD_RAPIDA } else { VELOCIDAD };
+            self.camara
+                .mover(direccion.normalize() * (velocidad * PASO));
+        }
     }
 
     fn frame(&mut self) {
@@ -42,12 +107,17 @@ impl App {
         let Some(gfx) = self.gfx.as_mut() else {
             return;
         };
-        gfx.render(frame.delta);
+        gfx.render(&self.camara);
 
         let fps = frame.fps.round() as u32;
-        if fps > 0 && fps != self.fps_mostrados {
-            self.fps_mostrados = fps;
-            gfx.window().set_title(&format!("Montworld - {fps} FPS"));
+        self.tiempo_titulo += frame.delta;
+        if fps > 0 && self.tiempo_titulo >= 0.25 {
+            self.tiempo_titulo = 0.0;
+            let p = self.camara.posicion;
+            gfx.window().set_title(&format!(
+                "Montworld - {fps} FPS - ({:.1}, {:.1}, {:.1})",
+                p.x, p.y, p.z
+            ));
         }
     }
 }
@@ -85,20 +155,70 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed
-                    && event.logical_key == Key::Named(NamedKey::Escape)
-                {
-                    event_loop.exit();
+
+            WindowEvent::Focused(true) => {
+                if !self.input.capturado {
+                    self.capturar_raton();
                 }
             }
+            WindowEvent::Focused(false) => self.liberar_raton(),
+
+            WindowEvent::KeyboardInput {
+                event: tecla,
+                is_synthetic: false,
+                ..
+            } => {
+                if let PhysicalKey::Code(codigo) = tecla.physical_key {
+                    match tecla.state {
+                        ElementState::Pressed => {
+                            let escape = tecla.logical_key == Key::Named(NamedKey::Escape);
+                            if escape {
+                                // Primero libera el raton; si ya estaba
+                                // libre, cierra el juego.
+                                if self.input.capturado {
+                                    self.liberar_raton();
+                                } else {
+                                    event_loop.exit();
+                                }
+                            } else {
+                                self.input.presionar(codigo);
+                            }
+                        }
+                        ElementState::Released => self.input.soltar(codigo),
+                    }
+                }
+            }
+
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => {
+                if !self.input.capturado {
+                    self.capturar_raton();
+                }
+            }
+
             WindowEvent::Resized(size) => {
-                if let Some(gfx) = self.gfx.as_ref() {
+                if let Some(gfx) = self.gfx.as_mut() {
                     gfx.resize(size.width, size.height);
                 }
             }
             WindowEvent::RedrawRequested => self.frame(),
             _ => {}
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        if let DeviceEvent::MouseMotion { delta } = event
+            && self.input.capturado
+        {
+            self.input.sumar_raton(delta.0 as f32, delta.1 as f32);
         }
     }
 

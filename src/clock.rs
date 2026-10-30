@@ -9,6 +9,9 @@ use std::time::{Duration, Instant};
 /// Duracion de un paso logico. 60 pasos por segundo.
 const TICK: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
+/// El mismo paso logico, en segundos, para la fisica y el movimiento.
+pub const PASO: f32 = 1.0 / 60.0;
+
 /// Si el juego se queda bloqueado mucho tiempo (por ejemplo al mover la
 /// ventana), no se acumulan cientos de pasos: se descarta el atraso.
 const MAX_TICKS: u32 = 5;

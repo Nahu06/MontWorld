@@ -35,7 +35,8 @@ FASE 1 - PROTOTIPO JUGABLE
 ------------------------------------------------------------
 [x] Ventana y contexto OpenGL + bucle principal con delta time
     (2026-10-30, probado por el usuario)
-[ ] Cámara en primera persona (teclado/ratón; táctil en Android)
+[x] Cámara en primera persona (teclado/ratón; táctil en Android)
+    (2026-10-30, ratón y teclado probados por el usuario)
 [ ] Datos de chunk y generación de un mundo de prueba
 [ ] Meshing de caras visibles y renderizado con atlas de texturas
 [ ] Romper y colocar bloques con raycast
@@ -72,6 +73,16 @@ FASE 4 - PUBLICACIÓN
 [ ] Empaquetado / entrega
 
 ------------------------------------------------------------
+VERSIONES PUBLICADAS
+------------------------------------------------------------
+v0.0.1 - 2026-10-30 - Base: ventana OpenGL 3.3, bucle con pasos
+         fijos a 60 Hz, FPS y posición en el título, run.sh y
+         lanzador de escritorio con icono.
+v0.0.2 - 2026-10-30 - Cámara libre en primera persona (ratón +
+         WASD + espacio/ctrl), escena de prueba con cubos, matemáticas
+         propias y tests de matrices.
+
+------------------------------------------------------------
 REGISTRO
 ------------------------------------------------------------
 2026-10-29 - Creación del roadmap inicial (plantilla).
@@ -83,5 +94,7 @@ REGISTRO
              Estructura Cargo, run.sh y lanzador de escritorio creados.
              Ventana + contexto OpenGL + bucle a 60 fps probados y
              confirmados por el usuario.
-             Siguiente paso: definir el alcance mínimo y seguir con la
-             cámara en primera persona.
+             v0.0.2: cámara libre en primera persona y escena de prueba
+             con cubos. Probada y confirmada por el usuario.
+             Siguiente paso: primer chunk de vóxeles (datos, generación
+             y render).
