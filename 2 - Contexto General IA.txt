@@ -31,11 +31,11 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 3. ESTADO GENERAL
 ------------------------------------------------------------
 Fase: prototipo (Fase 1 en curso)
-Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz, cámara libre en
-primera persona, mundo de 5×5 chunks (80×80 bloques) con generación
-continua y carga dinámica, romper/colocar bloques con raycast y mira.
-Va a 60 fps en el PC de referencia.
-No funciona / falta: texturas, guardado del mundo, colisiones,
+Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz, mundo de 5×5 chunks
+(80×80 bloques) con generación continua y carga dinámica, jugador con
+gravedad, colisiones, salto y sprint, y romper/colocar bloques con
+raycast y mira. Va a 60 fps en el PC de referencia.
+No funciona / falta: texturas, guardado del mundo, inventario,
 controles táctiles y build de Android.
 
 ------------------------------------------------------------
@@ -176,7 +176,20 @@ de asumir.
   preguntar al usuario.
 
 ------------------------------------------------------------
-10. REGISTRO DE ACTUALIZACIÓN
+10. CONTROLES Y FÍSICA
+------------------------------------------------------------
+Ratón: mirar. WASD: caminar. Shift: correr. Espacio: saltar.
+Clic izquierdo: romper bloque. Clic derecho: colocar piedra.
+Esc: liberar el ratón (otra vez Esc cierra el juego).
+
+Física actual (v0.0.7):
+- Cuerpo en caja de 0.6 × 1.8 bloques; la cámara va a 1.62 de alto.
+- Gravedad 28 bloques/s², salto de 8.5, caída máxima 40.
+- Colisiones resueltas eje por eje contra los bloques del mundo.
+- Ya no se vuela libremente: para explorar hay que caminar o saltar.
+
+------------------------------------------------------------
+11. REGISTRO DE ACTUALIZACIÓN
 ------------------------------------------------------------
 Última actualización: 2026-10-30
 Actualizado por: IA
@@ -201,3 +214,5 @@ render, world) con shaders en archivos. Probada por el usuario sin
 cambios de comportamiento.
 Añadida la regla 6 (modularidad obligatoria) y la sección 7 de
 arquitectura por capas.
+v0.0.7: gravedad, colisiones AABB, salto y sprint; controles y física
+documentados en la sección 10. Probado por el usuario.

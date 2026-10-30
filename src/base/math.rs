@@ -42,6 +42,24 @@ impl Vec3 {
         let largo = self.length();
         if largo > 0.0 { self * (1.0 / largo) } else { self }
     }
+
+    /// Componente por eje: 0 = X, 1 = Y, 2 = Z.
+    pub fn get(self, eje: usize) -> f32 {
+        match eje {
+            0 => self.x,
+            1 => self.y,
+            _ => self.z,
+        }
+    }
+
+    /// Copia el vector cambiando una sola componente.
+    pub fn con_eje(self, eje: usize, valor: f32) -> Self {
+        match eje {
+            0 => Self::new(valor, self.y, self.z),
+            1 => Self::new(self.x, valor, self.z),
+            _ => Self::new(self.x, self.y, valor),
+        }
+    }
 }
 
 impl Add for Vec3 {

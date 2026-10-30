@@ -1,8 +1,10 @@
-//! Jugador: cámara en primera persona y movimiento.
+//! Jugador: cuerpo con física simple y cámara en primera persona.
 //!
-//! La cámara guarda posición y ángulos (yaw/pitch) y construye las
-//! matrices de vista y proyección. El movimiento todavía no comprueba
-//! colisiones: es una cámara libre, útil para explorar y probar.
+//! El cuerpo es una caja (AABB) que cae por gravedad, salta y choca con
+//! los bloques sólidos. Para no depender de `world`, la comprobación de
+//! solidez se recibe como función: `(x, y, z) -> ¿hay bloque?`.
+//!
+//! La cámara va montada a la altura de los ojos del cuerpo.
 
 use std::f32::consts::FRAC_PI_2;
 
@@ -17,10 +19,20 @@ pub const SENSIBILIDAD: f32 = 0.0022;
 /// Límite del pitch para no dar la vuelta a la cámara.
 const LIMITE_PITCH: f32 = FRAC_PI_2 - 0.01;
 
-/// Velocidad de la cámara libre, en unidades por segundo.
-const VELOCIDAD: f32 = 7.0;
-/// Velocidad con Shift pulsado.
-const VELOCIDAD_RAPIDA: f32 = 20.0;
+/// Medidas del cuerpo, en bloques.
+pub const ANCHO: f32 = 0.6;
+pub const ALTO: f32 = 1.8;
+pub const ALTURA_OJOS: f32 = 1.62;
+
+/// Física del jugador.
+const GRAVEDAD: f32 = 28.0;
+const CAIDA_MAXIMA: f32 = 40.0;
+const VELOCIDAD_CAMINAR: f32 = 5.5;
+const VELOCIDAD_CORRER: f32 = 9.0;
+const IMPULSO_SALTO: f32 = 8.5;
+
+/// Margen para no detectar colisión con el bloque que se acaba de tocar.
+const MARGEN: f32 = 0.001;
 
 pub struct Camara {
     pub posicion: Vec3,
@@ -54,7 +66,7 @@ impl Camara {
         )
     }
 
-    /// Dirección horizontal de avance, para no volar al mirar arriba.
+    /// Dirección horizontal de avance, para caminar sin mirar al cielo.
     pub fn adelante_horizontal(&self) -> Vec3 {
         Vec3::new(self.yaw.sin(), 0.0, -self.yaw.cos())
     }
@@ -67,10 +79,6 @@ impl Camara {
     pub fn girar(&mut self, dx: f32, dy: f32) {
         self.yaw += dx * SENSIBILIDAD;
         self.pitch = (self.pitch - dy * SENSIBILIDAD).clamp(-LIMITE_PITCH, LIMITE_PITCH);
-    }
-
-    pub fn mover(&mut self, desplazamiento: Vec3) {
-        self.posicion = self.posicion + desplazamiento;
     }
 
     /// Orienta la cámara hacia un punto del mundo.
@@ -101,23 +109,43 @@ impl Camara {
 
 pub struct Jugador {
     pub camara: Camara,
+    /// Posición de los pies (centro de la base del cuerpo).
+    pub posicion: Vec3,
+    pub velocidad: Vec3,
+    pub en_suelo: bool,
 }
 
 impl Jugador {
     pub fn nuevo(posicion: Vec3) -> Self {
-        Self {
-            camara: Camara::new(posicion),
-        }
+        let mut jugador = Self {
+            camara: Camara::new(posicion + Vec3::new(0.0, ALTURA_OJOS, 0.0)),
+            posicion,
+            velocidad: Vec3::ZERO,
+            en_suelo: false,
+        };
+        jugador.sincronizar_camara();
+        jugador
     }
 
-    /// Un paso lógico de control: girar con el ratón y moverse con el
-    /// teclado. `paso` es el tiempo simulado (1/60 s).
-    pub fn actualizar(&mut self, entrada: &mut Input, paso: f32) {
+    /// Copia la posición del cuerpo a la cámara (a la altura de los ojos).
+    pub fn sincronizar_camara(&mut self) {
+        self.camara.posicion = self.posicion + Vec3::new(0.0, ALTURA_OJOS, 0.0);
+    }
+
+    /// Un paso de control y física. `solido` dice si una celda es sólida.
+    pub fn actualizar(
+        &mut self,
+        entrada: &mut Input,
+        paso: f32,
+        solido: &dyn Fn(i32, i32, i32) -> bool,
+    ) {
         let (dx, dy) = entrada.tomar_raton();
         if dx != 0.0 || dy != 0.0 {
             self.camara.girar(dx, dy);
         }
 
+        // Velocidad horizontal: se fija directamente para que el control
+        // responda al instante.
         let mut direccion = Vec3::ZERO;
         if entrada.abajo(KeyCode::KeyW) {
             direccion = direccion + self.camara.adelante_horizontal();
@@ -131,26 +159,90 @@ impl Jugador {
         if entrada.abajo(KeyCode::KeyA) {
             direccion = direccion - self.camara.derecha();
         }
-        if entrada.abajo(KeyCode::Space) {
-            direccion.y += 1.0;
+
+        let correr = entrada.abajo(KeyCode::ShiftLeft) || entrada.abajo(KeyCode::ShiftRight);
+        let velocidad = if correr {
+            VELOCIDAD_CORRER
+        } else {
+            VELOCIDAD_CAMINAR
+        };
+        let horizontal = if direccion.length() > 0.0 {
+            direccion.normalize() * velocidad
+        } else {
+            Vec3::ZERO
+        };
+        self.velocidad.x = horizontal.x;
+        self.velocidad.z = horizontal.z;
+
+        // Salto y gravedad.
+        if self.en_suelo && entrada.abajo(KeyCode::Space) {
+            self.velocidad.y = IMPULSO_SALTO;
+            self.en_suelo = false;
         }
-        if entrada.abajo(KeyCode::ControlLeft) || entrada.abajo(KeyCode::ControlRight) {
-            direccion.y -= 1.0;
+        self.velocidad.y = (self.velocidad.y - GRAVEDAD * paso).max(-CAIDA_MAXIMA);
+
+        // Movimiento resuelto eje por eje para poder deslizar por paredes.
+        self.mover_eje(0, paso, solido);
+        self.mover_eje(2, paso, solido);
+        self.mover_eje(1, paso, solido);
+
+        self.sincronizar_camara();
+    }
+
+    /// Avanza un eje y deshace el movimiento si acaba dentro de un bloque.
+    fn mover_eje(&mut self, eje: usize, paso: f32, solido: &dyn Fn(i32, i32, i32) -> bool) {
+        let anterior = self.posicion;
+        let delta = self.velocidad.get(eje) * paso;
+        self.posicion = self.posicion.con_eje(eje, self.posicion.get(eje) + delta);
+
+        if !self.colisiona(solido) {
+            if eje == 1 {
+                self.en_suelo = false;
+            }
+            return;
         }
 
-        if direccion.length() > 0.0 {
-            let rapida =
-                entrada.abajo(KeyCode::ShiftLeft) || entrada.abajo(KeyCode::ShiftRight);
-            let velocidad = if rapida { VELOCIDAD_RAPIDA } else { VELOCIDAD };
-            self.camara
-                .mover(direccion.normalize() * (velocidad * paso));
+        self.posicion = anterior;
+        if eje == 1 {
+            // Si chocamos bajando, estamos apoyados en el suelo.
+            self.en_suelo = self.velocidad.y < 0.0;
         }
+        self.velocidad = self.velocidad.con_eje(eje, 0.0);
+    }
+
+    /// Comprueba si la caja del cuerpo se solapa con algún bloque sólido.
+    fn colisiona(&self, solido: &dyn Fn(i32, i32, i32) -> bool) -> bool {
+        let min = self.posicion + Vec3::new(-ANCHO * 0.5 + MARGEN, MARGEN, -ANCHO * 0.5 + MARGEN);
+        let max = self.posicion + Vec3::new(ANCHO * 0.5 - MARGEN, ALTO - MARGEN, ANCHO * 0.5 - MARGEN);
+
+        let x0 = min.x.floor() as i32;
+        let y0 = min.y.floor() as i32;
+        let z0 = min.z.floor() as i32;
+        let x1 = max.x.floor() as i32;
+        let y1 = max.y.floor() as i32;
+        let z1 = max.z.floor() as i32;
+
+        for y in y0..=y1 {
+            for z in z0..=z1 {
+                for x in x0..=x1 {
+                    if solido(x, y, z) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Suelo a partir de y = 3 (el bloque y = 2 es el último sólido).
+    fn suelo(_x: i32, y: i32, _z: i32) -> bool {
+        y < 3
+    }
 
     fn transformar(m: &Mat4, p: Vec3) -> [f32; 4] {
         let mut salida = [0.0f32; 4];
@@ -166,6 +258,12 @@ mod tests {
     fn distancia_en_vista(cam: &Camara, punto: Vec3) -> f32 {
         let p = transformar(&cam.vista(), punto);
         (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
+    }
+
+    fn avanzar(jugador: &mut Jugador, entrada: &mut Input, pasos: usize, solido: &dyn Fn(i32, i32, i32) -> bool) {
+        for _ in 0..pasos {
+            jugador.actualizar(entrada, 1.0 / 60.0, solido);
+        }
     }
 
     #[test]
@@ -184,8 +282,6 @@ mod tests {
             assert!(derecha.dot(arriba).abs() < 1e-5);
             assert!((adelante.length() - 1.0).abs() < 1e-5);
             assert!((arriba.length() - 1.0).abs() < 1e-5);
-            // Mirando hacia arriba, "arriba" de la vista sigue teniendo
-            // componente positiva en Y: la imagen no se invierte.
             assert!(arriba.y > 0.0, "pitch {pitch}: arriba = {arriba:?}");
         }
     }
@@ -219,17 +315,54 @@ mod tests {
     }
 
     #[test]
-    fn el_jugador_avanza_con_w() {
-        let mut jugador = Jugador::nuevo(Vec3::new(0.0, 0.0, 0.0));
+    fn el_cuerpo_cae_y_se_apoya_en_el_suelo() {
+        let mut jugador = Jugador::nuevo(Vec3::new(0.5, 10.0, 0.5));
         let mut entrada = Input::new();
-        entrada.presionar(KeyCode::KeyW);
+        avanzar(&mut jugador, &mut entrada, 240, &suelo);
 
-        jugador.actualizar(&mut entrada, 1.0 / 60.0);
-        assert!(jugador.camara.posicion.z < 0.0);
+        assert!(jugador.en_suelo, "debería estar apoyado");
+        assert!(
+            (jugador.posicion.y - 3.0).abs() < 0.02,
+            "y = {} (esperado ~3)",
+            jugador.posicion.y
+        );
+    }
 
-        jugador.camara.posicion = Vec3::ZERO;
+    #[test]
+    fn el_salto_despega_del_suelo_y_vuelve_a_caer() {
+        let mut jugador = Jugador::nuevo(Vec3::new(0.5, 3.0, 0.5));
+        let mut entrada = Input::new();
+        avanzar(&mut jugador, &mut entrada, 30, &suelo);
+        assert!(jugador.en_suelo);
+
+        entrada.presionar(KeyCode::Space);
+        jugador.actualizar(&mut entrada, 1.0 / 60.0, &suelo);
+        entrada.soltar(KeyCode::Space);
+
+        assert!(!jugador.en_suelo);
+        assert!(jugador.velocidad.y > 0.0);
+
+        avanzar(&mut jugador, &mut entrada, 120, &suelo);
+        assert!(jugador.en_suelo, "debería volver a caer");
+    }
+
+    #[test]
+    fn una_pared_frena_el_avance() {
+        // Pared sólida para x >= 5, sobre el suelo.
+        let pared = |x: i32, y: i32, _z: i32| y < 3 || x >= 5;
+        let mut jugador = Jugador::nuevo(Vec3::new(0.5, 3.0, 0.5));
+        let mut entrada = Input::new();
+
         jugador.camara.yaw = FRAC_PI_2;
-        jugador.actualizar(&mut entrada, 1.0 / 60.0);
-        assert!(jugador.camara.posicion.x > 0.0);
+        entrada.presionar(KeyCode::KeyW);
+        avanzar(&mut jugador, &mut entrada, 240, &pared);
+
+        assert!(jugador.en_suelo);
+        assert!(
+            jugador.posicion.x < 5.0,
+            "atravesó la pared: x = {}",
+            jugador.posicion.x
+        );
+        assert!(jugador.posicion.x > 4.0, "no llegó a la pared: x = {}", jugador.posicion.x);
     }
 }

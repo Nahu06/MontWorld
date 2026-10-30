@@ -42,6 +42,8 @@ FASE 1 - PROTOTIPO JUGABLE
     (2026-10-30)
 [ ] Atlas de texturas y coordenadas UV (sustituir los colores planos)
 [x] Romper y colocar bloques con raycast (2026-10-30)
+[x] Gravedad, colisiones y salto (2026-10-30, probado por el
+    usuario)
 [x] Mundo dividido en chunks con carga/descarga alrededor del jugador
     (2026-10-30)
 [ ] Guardado y carga del mundo
@@ -98,6 +100,8 @@ v0.0.6 - 2026-10-30 - Reestructuración modular: capas app, juego,
          jugador, entrada, base, render y world; shaders en archivos y
          seguimiento de chunks sucios dentro del mundo. Probada por el
          usuario sin cambios de comportamiento.
+v0.0.7 - 2026-10-30 - Gravedad, colisiones AABB contra bloques, salto
+         y sprint; el jugador camina por el mundo en vez de volar.
 
 ------------------------------------------------------------
 REGISTRO
@@ -126,4 +130,6 @@ REGISTRO
              gestionados por el mundo. Probado por el usuario: todo
              funciona igual.
              Nueva regla 6: modularidad obligatoria.
+             v0.0.7: gravedad, colisiones, salto y sprint. Probado por
+             el usuario: camina y choca correctamente.
              Siguiente paso: atlas de texturas o guardado del mundo.

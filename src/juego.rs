@@ -9,7 +9,7 @@ use crate::base::math::Vec3;
 use crate::entrada::Input;
 use crate::jugador::Jugador;
 use crate::world::block::Bloque;
-use crate::world::{Mundo, raycast};
+use crate::world::{Mundo, generacion, raycast};
 
 /// Alcance del rayo para romper y colocar bloques, en bloques.
 const ALCANCE: f32 = 6.0;
@@ -33,7 +33,12 @@ impl Juego {
     pub fn nuevo() -> Self {
         Self {
             mundo: Mundo::new(2),
-            jugador: Jugador::nuevo(Vec3::new(8.5, 18.0, 30.0)),
+            // Aparecer justo encima del terreno, en el centro del mundo.
+            jugador: Jugador::nuevo(Vec3::new(
+                8.5,
+                generacion::altura(8, 8) as f32 + 0.2,
+                8.5,
+            )),
             centro: None,
             cambios: Cambios::default(),
         }
@@ -41,7 +46,10 @@ impl Juego {
 
     /// Un paso de simulación.
     pub fn actualizar(&mut self, entrada: &mut Input, paso: f32) {
-        self.jugador.actualizar(entrada, paso);
+        {
+            let solido = |x, y, z| !self.mundo.bloque(x, y, z).es_aire();
+            self.jugador.actualizar(entrada, paso, &solido);
+        }
         self.actualizar_chunks();
     }
 
