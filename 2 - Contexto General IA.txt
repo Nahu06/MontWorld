@@ -33,9 +33,9 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 Fase: prototipo (Fase 1 en curso)
 Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz con vsync, cámara
 libre en primera persona, un chunk de 16×16×16 con relieve y meshing
-de caras visibles (colores planos), y lanzador de escritorio.
-No funciona / falta: varios chunks, texturas, romper y colocar
-bloques, guardado, controles táctiles y build de Android.
+de caras visibles, y romper/colocar bloques con raycast y mira.
+No funciona / falta: varios chunks, texturas, guardado, controles
+táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -99,6 +99,7 @@ Montworld/
       block.rs          Tipos de bloque y colores
       chunk.rs          Chunk 16×16×16 y generación de terreno
       meshing.rs        Caras visibles y construcción de la malla
+      raycast.rs        Rayo de vóxeles para romper y colocar
   assets/
     icono.png           Icono del lanzador
   target/               Compilación (ignorada por Git)
@@ -154,3 +155,5 @@ v0.0.2: cámara en primera persona y escena de prueba probadas y
 confirmadas por el usuario.
 v0.0.3: primer chunk con meshing de caras visibles; corregido el giro
 de cámara y confirmado por el usuario.
+v0.0.4: romper/colocar bloques con raycast y mira; probado por el
+usuario.

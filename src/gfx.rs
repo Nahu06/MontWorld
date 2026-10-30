@@ -23,6 +23,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::camera::Camera;
+use crate::math::Mat4;
 
 const ANCHO_INICIAL: u32 = 1280;
 const ALTO_INICIAL: u32 = 720;
@@ -83,6 +84,7 @@ pub struct Gfx {
     programa: glow::Program,
     u_vista_proy: Option<glow::UniformLocation>,
     malla: Option<Malla>,
+    mira: Malla,
     ancho: u32,
     alto: u32,
 }
@@ -184,6 +186,7 @@ impl Gfx {
         println!("Montworld: GL {version} | {renderer}");
 
         let programa = crear_programa(&gl)?;
+        let mira = Malla::subir(&gl, &vertices_mira())?;
         let tamano = window.inner_size();
 
         Ok(Self {
@@ -194,6 +197,7 @@ impl Gfx {
             programa,
             u_vista_proy: None,
             malla: None,
+            mira,
             ancho: tamano.width.max(1),
             alto: tamano.height.max(1),
         })
@@ -252,6 +256,15 @@ impl Gfx {
             if let Some(malla) = self.malla.as_ref() {
                 malla.dibujar(&self.gl);
             }
+
+            // Mira fija en el centro de la pantalla, sin profundidad.
+            self.gl.disable(glow::DEPTH_TEST);
+            if let Some(ubicacion) = self.u_vista_proy.as_ref() {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(ubicacion), false, &Mat4::identidad().m);
+            }
+            self.mira.dibujar(&self.gl);
+            self.gl.enable(glow::DEPTH_TEST);
         }
 
         let _ = self.surface.swap_buffers(&self.context);
@@ -263,6 +276,7 @@ impl Drop for Gfx {
         if let Some(malla) = self.malla.take() {
             malla.borrar(&self.gl);
         }
+        self.mira.borrar(&self.gl);
         unsafe {
             self.gl.delete_program(self.programa);
         }
@@ -373,4 +387,35 @@ unsafe fn compilar_shader(
 /// Convierte una lista de flotantes en bytes para subirla a la GPU.
 fn por_bytes(datos: &[f32]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(datos.as_ptr().cast(), datos.len() * 4) }
+}
+
+/// Mira en coordenadas de pantalla (NDC): dos barras cruzadas.
+fn vertices_mira() -> Vec<f32> {
+    const BRAZO: f32 = 0.022;
+    const GROSOR: f32 = 0.0026;
+    const COLOR: [f32; 3] = [0.95, 0.97, 1.0];
+
+    let mut datos = Vec::new();
+    empujar_rectangulo(&mut datos, -BRAZO, -GROSOR, BRAZO, GROSOR, COLOR);
+    empujar_rectangulo(&mut datos, -GROSOR, -BRAZO, GROSOR, BRAZO, COLOR);
+    datos
+}
+
+fn empujar_rectangulo(
+    salida: &mut Vec<f32>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: [f32; 3],
+) {
+    let mut vertice = |x: f32, y: f32| {
+        salida.extend_from_slice(&[x, y, 0.0, color[0], color[1], color[2]]);
+    };
+    vertice(x0, y0);
+    vertice(x1, y0);
+    vertice(x1, y1);
+    vertice(x0, y0);
+    vertice(x1, y1);
+    vertice(x0, y1);
 }

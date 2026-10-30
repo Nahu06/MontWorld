@@ -11,13 +11,15 @@ use crate::clock::{Clock, PASO};
 use crate::gfx::Gfx;
 use crate::input::Input;
 use crate::math::Vec3;
-use crate::world::Chunk;
-use crate::world::meshing;
+use crate::world::block::Bloque;
+use crate::world::{Chunk, meshing, raycast};
 
 /// Velocidad de la camara libre, en unidades por segundo.
 const VELOCIDAD: f32 = 7.0;
 /// Velocidad con Shift pulsado.
 const VELOCIDAD_RAPIDA: f32 = 20.0;
+/// Alcance del rayo para romper y colocar bloques, en bloques.
+const ALCANCE: f32 = 6.0;
 
 pub struct App {
     gfx: Option<Gfx>,
@@ -38,7 +40,7 @@ impl App {
             gfx: None,
             clock: Clock::new(),
             input: Input::new(),
-            camara: Camera::new(Vec3::new(8.0, 22.0, 34.0)),
+            camara: Camera::new(Vec3::new(8.5, 11.0, 14.5)),
             mundo,
             tiempo_titulo: 0.0,
         }
@@ -53,6 +55,55 @@ impl App {
         };
         if let Err(err) = gfx.cargar_malla(&vertices) {
             eprintln!("Montworld: no se pudo subir la malla del mundo: {err}");
+        }
+    }
+
+    /// Quita el bloque al que apunta la mira.
+    fn romper_bloque(&mut self) {
+        let Some(impacto) = raycast::lanzar(
+            self.camara.posicion,
+            self.camara.adelante(),
+            ALCANCE,
+            &self.mundo,
+        ) else {
+            return;
+        };
+
+        let [x, y, z] = impacto.bloque;
+        self.mundo.poner(x, y, z, Bloque::Aire);
+        self.subir_mundo();
+    }
+
+    /// Coloca un bloque en la cara apuntada.
+    fn colocar_bloque(&mut self) {
+        let Some(impacto) = raycast::lanzar(
+            self.camara.posicion,
+            self.camara.adelante(),
+            ALCANCE,
+            &self.mundo,
+        ) else {
+            return;
+        };
+
+        // Si el rayo nace dentro de un bloque no hay cara donde colocar.
+        if impacto.normal == [0, 0, 0] {
+            return;
+        }
+
+        let [x, y, z] = raycast::vecino(&impacto);
+
+        // No colocar un bloque encima del jugador.
+        let p = self.camara.posicion;
+        let ocupada = p.x.floor() as i32 == x
+            && p.y.floor() as i32 == y
+            && p.z.floor() as i32 == z;
+        if ocupada {
+            return;
+        }
+
+        if self.mundo.bloque(x, y, z).es_aire() {
+            self.mundo.poner(x, y, z, Bloque::Piedra);
+            self.subir_mundo();
         }
     }
 
@@ -235,11 +286,17 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
-                button: MouseButton::Left,
+                button,
                 ..
             } => {
                 if !self.input.capturado {
                     self.capturar_raton();
+                } else {
+                    match button {
+                        MouseButton::Left => self.romper_bloque(),
+                        MouseButton::Right => self.colocar_bloque(),
+                        _ => {}
+                    }
                 }
             }
 

@@ -75,6 +75,18 @@ pub struct Mat4 {
 }
 
 impl Mat4 {
+    /// Matriz identidad, util para dibujar en coordenadas de pantalla.
+    pub fn identidad() -> Self {
+        Self {
+            m: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+        }
+    }
+
     /// Proyeccion en perspectiva. `fov_y` va en radianes.
     pub fn perspectiva(fov_y: f32, aspecto: f32, cerca: f32, lejos: f32) -> Self {
         let f = 1.0 / (fov_y * 0.5).tan();
