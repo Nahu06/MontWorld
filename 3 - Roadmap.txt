@@ -37,8 +37,10 @@ FASE 1 - PROTOTIPO JUGABLE
     (2026-10-30, probado por el usuario)
 [x] Cámara en primera persona (teclado/ratón; táctil en Android)
     (2026-10-30, ratón y teclado probados por el usuario)
-[ ] Datos de chunk y generación de un mundo de prueba
-[ ] Meshing de caras visibles y renderizado con atlas de texturas
+[x] Datos de chunk y generación de un mundo de prueba (2026-10-30)
+[x] Meshing de caras visibles y renderizado con colores planos
+    (2026-10-30)
+[ ] Atlas de texturas y coordenadas UV (sustituir los colores planos)
 [ ] Romper y colocar bloques con raycast
 [ ] Mundo dividido en chunks con carga/descarga alrededor del jugador
 [ ] Guardado y carga del mundo
@@ -81,6 +83,10 @@ v0.0.1 - 2026-10-30 - Base: ventana OpenGL 3.3, bucle con pasos
 v0.0.2 - 2026-10-30 - Cámara libre en primera persona (ratón +
          WASD + espacio/ctrl), escena de prueba con cubos, matemáticas
          propias y tests de matrices.
+v0.0.3 - 2026-10-30 - Primer chunk de 16×16×16: bloques de 1 byte,
+         terreno con relieve, meshing de caras visibles y render como
+         una sola malla. Corregida la orientación de la matriz de vista
+         (el mundo orbitaba al girar) y la estabilidad cerca del cenit.
 
 ------------------------------------------------------------
 REGISTRO
@@ -96,5 +102,7 @@ REGISTRO
              confirmados por el usuario.
              v0.0.2: cámara libre en primera persona y escena de prueba
              con cubos. Probada y confirmada por el usuario.
-             Siguiente paso: primer chunk de vóxeles (datos, generación
-             y render).
+             v0.0.3: primer chunk 16×16×16 con meshing de caras
+             visibles. Corregido el giro de cámara (matriz de vista) y
+             probado por el usuario.
+             Siguiente paso: romper y colocar bloques con raycast.

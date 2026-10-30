@@ -66,14 +66,20 @@ impl Camera {
         self.posicion = self.posicion + desplazamiento;
     }
 
+    /// Orienta la camara hacia un punto del mundo.
+    pub fn mirar_a(&mut self, objetivo: Vec3) {
+        let direccion = (objetivo - self.posicion).normalize();
+        self.yaw = direccion.x.atan2(-direccion.z);
+        self.pitch = direccion.y.asin().clamp(-LIMITE_PITCH, LIMITE_PITCH);
+    }
+
     pub fn vista(&self) -> Mat4 {
-        let arriba = if self.pitch.abs() > 1.5 {
-            // Cerca del cenit el vector "arriba" del mundo deja de servir.
-            self.derecha().cross(self.adelante()) * -1.0
-        } else {
-            Vec3::Y
-        };
-        Mat4::mirar_hacia(self.posicion, self.posicion + self.adelante(), arriba)
+        // La base se construye a partir de yaw y pitch, y "arriba" sale del
+        // producto vectorial: nunca degenera, ni mirando casi al cenit.
+        let adelante = self.adelante();
+        let derecha = self.derecha();
+        let arriba = derecha.cross(adelante);
+        Mat4::desde_base(self.posicion, derecha, arriba, adelante)
     }
 
     pub fn proyeccion(&self, aspecto: f32) -> Mat4 {
@@ -83,5 +89,76 @@ impl Camera {
     pub fn vista_proyeccion(&self, aspecto: f32) -> Mat4 {
         // OpenGL multiplica por la izquierda: clip = proyeccion * vista * punto.
         self.proyeccion(aspecto).mul(self.vista())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn transformar(m: &Mat4, p: Vec3) -> [f32; 4] {
+        let mut salida = [0.0f32; 4];
+        for fila in 0..4 {
+            salida[fila] = m.m[fila] * p.x
+                + m.m[4 + fila] * p.y
+                + m.m[8 + fila] * p.z
+                + m.m[12 + fila];
+        }
+        salida
+    }
+
+    fn distancia_en_vista(cam: &Camera, punto: Vec3) -> f32 {
+        let p = transformar(&cam.vista(), punto);
+        (p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt()
+    }
+
+    #[test]
+    fn la_base_de_la_camara_es_ortogonal() {
+        for pitch in [-1.2, -0.4, 0.0, 0.5, 1.55] {
+            let mut cam = Camera::new(Vec3::new(1.0, 2.0, 3.0));
+            cam.yaw = 0.8;
+            cam.pitch = pitch;
+
+            let adelante = cam.adelante();
+            let derecha = cam.derecha();
+            let arriba = derecha.cross(adelante);
+
+            assert!(adelante.dot(derecha).abs() < 1e-5);
+            assert!(adelante.dot(arriba).abs() < 1e-5);
+            assert!(derecha.dot(arriba).abs() < 1e-5);
+            assert!((adelante.length() - 1.0).abs() < 1e-5);
+            assert!((arriba.length() - 1.0).abs() < 1e-5);
+            // Mirando hacia arriba, "arriba" de la vista sigue teniendo
+            // componente positiva en Y: la imagen no se invierte.
+            assert!(arriba.y > 0.0, "pitch {pitch}: arriba = {arriba:?}");
+        }
+    }
+
+    #[test]
+    fn girar_no_acerca_ni_aleja_el_mundo() {
+        let punto = Vec3::new(8.0, 8.0, 8.0);
+        let mut cam = Camera::new(Vec3::new(8.0, 22.0, 34.0));
+        let referencia = distancia_en_vista(&cam, punto);
+
+        for (yaw, pitch) in [(0.0, 0.0), (0.7, 0.3), (2.4, -0.6), (3.0, 1.5), (-1.2, -1.55)] {
+            cam.yaw = yaw;
+            cam.pitch = pitch;
+            let distancia = distancia_en_vista(&cam, punto);
+            assert!(
+                (distancia - referencia).abs() < 1e-3,
+                "yaw {yaw}, pitch {pitch}: {distancia} != {referencia}"
+            );
+        }
+    }
+
+    #[test]
+    fn mirar_a_apunta_al_objetivo() {
+        let objetivo = Vec3::new(8.0, 8.0, 8.0);
+        let mut cam = Camera::new(Vec3::new(8.0, 22.0, 34.0));
+        cam.mirar_a(objetivo);
+
+        let p = transformar(&cam.vista(), objetivo);
+        assert!(p[0].abs() < 1e-3 && p[1].abs() < 1e-3, "{p:?}");
+        assert!(p[2] < 0.0, "el objetivo debe quedar delante: {p:?}");
     }
 }

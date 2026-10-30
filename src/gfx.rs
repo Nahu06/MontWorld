@@ -1,11 +1,11 @@
 //! Capa grafica: ventana, contexto de OpenGL y dibujo de la escena.
 //!
 //! En escritorio se pide OpenGL 3.3 core; en Android, OpenGL ES 3.0. Los
-//! shaders se escriben una vez y se elige la version segun la plataforma.
+//! shaders estan escritos una vez para cada version y se elige segun la
+//! plataforma.
 //!
-//! La escena actual es solo una referencia visual (cubos de colores) para
-//! poder comprobar el movimiento de la camara. Se sustituira por el mundo
-//! de bloques.
+//! La geometria que se dibuja es la malla de un chunk, subida a la GPU como
+//! un unico buffer de posicion + color.
 
 use std::error::Error;
 use std::num::NonZeroU32;
@@ -23,12 +23,11 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::camera::Camera;
-use crate::math::Vec3;
 
 const ANCHO_INICIAL: u32 = 1280;
 const ALTO_INICIAL: u32 = 720;
 
-/// Cuantos flotantes ocupa un vertice: posicion (3) + color (3).
+/// Flotantes por vertice: posicion (3) + color (3).
 const FLOATS_POR_VERTICE: i32 = 6;
 
 #[cfg(not(target_os = "android"))]
@@ -83,11 +82,59 @@ pub struct Gfx {
 
     programa: glow::Program,
     u_vista_proy: Option<glow::UniformLocation>,
+    malla: Option<Malla>,
+    ancho: u32,
+    alto: u32,
+}
+
+/// Geometria en la GPU: un VAO con posicion y color entrelazados.
+struct Malla {
     vao: glow::VertexArray,
     vbo: glow::Buffer,
     vertices: i32,
-    ancho: u32,
-    alto: u32,
+}
+
+impl Malla {
+    fn subir(gl: &glow::Context, datos: &[f32]) -> Result<Self, Box<dyn Error>> {
+        unsafe {
+            let vao = gl.create_vertex_array()?;
+            let vbo = gl.create_buffer()?;
+
+            gl.bind_vertex_array(Some(vao));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, por_bytes(datos), glow::STATIC_DRAW);
+
+            let paso = FLOATS_POR_VERTICE * 4;
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, paso, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, paso, 12);
+
+            gl.bind_vertex_array(None);
+            gl.bind_buffer(glow::ARRAY_BUFFER, None);
+
+            Ok(Self {
+                vao,
+                vbo,
+                vertices: (datos.len() / FLOATS_POR_VERTICE as usize) as i32,
+            })
+        }
+    }
+
+    fn dibujar(&self, gl: &glow::Context) {
+        unsafe {
+            gl.bind_vertex_array(Some(self.vao));
+            gl.draw_arrays(glow::TRIANGLES, 0, self.vertices);
+            gl.bind_vertex_array(None);
+        }
+    }
+
+    fn borrar(&self, gl: &glow::Context) {
+        unsafe {
+            gl.delete_vertex_array(self.vao);
+            gl.delete_buffer(self.vbo);
+        }
+    }
 }
 
 impl Gfx {
@@ -137,35 +184,6 @@ impl Gfx {
         println!("Montworld: GL {version} | {renderer}");
 
         let programa = crear_programa(&gl)?;
-
-        // Escena de referencia: el suelo y unos cubos de colores.
-        let datos = escena_de_prueba();
-        let vertices = (datos.len() / FLOATS_POR_VERTICE as usize) as i32;
-
-        let (vao, vbo) = unsafe {
-            let vao = gl.create_vertex_array()?;
-            let vbo = gl.create_buffer()?;
-
-            gl.bind_vertex_array(Some(vao));
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                por_bytes(&datos),
-                glow::STATIC_DRAW,
-            );
-
-            let paso = FLOATS_POR_VERTICE * 4;
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, paso, 0);
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, paso, 12);
-
-            gl.bind_vertex_array(None);
-            gl.bind_buffer(glow::ARRAY_BUFFER, None);
-
-            (vao, vbo)
-        };
-
         let tamano = window.inner_size();
 
         Ok(Self {
@@ -175,9 +193,7 @@ impl Gfx {
             window,
             programa,
             u_vista_proy: None,
-            vao,
-            vbo,
-            vertices,
+            malla: None,
             ancho: tamano.width.max(1),
             alto: tamano.height.max(1),
         })
@@ -199,6 +215,16 @@ impl Gfx {
         }
     }
 
+    /// Sube una malla nueva a la GPU, sustituyendo la anterior.
+    pub fn cargar_malla(&mut self, datos: &[f32]) -> Result<(), Box<dyn Error>> {
+        let nueva = Malla::subir(&self.gl, datos)?;
+        if let Some(anterior) = self.malla.replace(nueva) {
+            anterior.borrar(&self.gl);
+        }
+        println!("Montworld: malla con {} vertices", datos.len() / 6);
+        Ok(())
+    }
+
     pub fn render(&mut self, camara: &Camera) {
         let vista_proy = camara.vista_proyeccion(self.aspecto());
 
@@ -207,21 +233,25 @@ impl Gfx {
             self.gl.clear_color(0.53, 0.72, 0.92, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
+            if self.malla.is_none() {
+                let _ = self.surface.swap_buffers(&self.context);
+                return;
+            }
+
             self.gl.enable(glow::DEPTH_TEST);
             self.gl.use_program(Some(self.programa));
 
             if self.u_vista_proy.is_none() {
-                self.u_vista_proy =
-                    self.gl.get_uniform_location(self.programa, "u_vista_proy");
+                self.u_vista_proy = self.gl.get_uniform_location(self.programa, "u_vista_proy");
             }
             if let Some(ubicacion) = self.u_vista_proy.as_ref() {
                 self.gl
                     .uniform_matrix_4_f32_slice(Some(ubicacion), false, &vista_proy.m);
             }
 
-            self.gl.bind_vertex_array(Some(self.vao));
-            self.gl.draw_arrays(glow::TRIANGLES, 0, self.vertices);
-            self.gl.bind_vertex_array(None);
+            if let Some(malla) = self.malla.as_ref() {
+                malla.dibujar(&self.gl);
+            }
         }
 
         let _ = self.surface.swap_buffers(&self.context);
@@ -230,10 +260,11 @@ impl Gfx {
 
 impl Drop for Gfx {
     fn drop(&mut self) {
+        if let Some(malla) = self.malla.take() {
+            malla.borrar(&self.gl);
+        }
         unsafe {
             self.gl.delete_program(self.programa);
-            self.gl.delete_vertex_array(self.vao);
-            self.gl.delete_buffer(self.vbo);
         }
     }
 }
@@ -342,91 +373,4 @@ unsafe fn compilar_shader(
 /// Convierte una lista de flotantes en bytes para subirla a la GPU.
 fn por_bytes(datos: &[f32]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(datos.as_ptr().cast(), datos.len() * 4) }
-}
-
-/// Cubo con caras sombreadas para distinguir el volumen sin iluminacion.
-fn empujar_cubo(salida: &mut Vec<f32>, centro: Vec3, lado: f32, color: Vec3) {
-    // Esquinas del cubo unidad: (0,0,0) ... (1,1,1).
-    const ESQUINAS: [[f32; 3]; 8] = [
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [1.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [1.0, 0.0, 1.0],
-        [1.0, 1.0, 1.0],
-        [0.0, 1.0, 1.0],
-    ];
-
-    // Caras como cuadruples de esquinas, y su brillo relativo.
-    const CARAS: [[usize; 4]; 6] = [
-        [4, 5, 6, 7], // frente (+Z)
-        [1, 0, 3, 2], // atras  (-Z)
-        [0, 4, 7, 3], // izquierda (-X)
-        [5, 1, 2, 6], // derecha (+X)
-        [3, 7, 6, 2], // arriba (+Y)
-        [0, 1, 5, 4], // abajo  (-Y)
-    ];
-    const BRILLO: [f32; 6] = [0.92, 0.72, 0.72, 0.86, 1.0, 0.55];
-
-    let mitad = lado * 0.5;
-    let mut vertice = |indice: usize, brillo: f32| {
-        let e = ESQUINAS[indice];
-        let posicion = Vec3::new(
-            centro.x + (e[0] * 2.0 - 1.0) * mitad,
-            centro.y + (e[1] * 2.0 - 1.0) * mitad,
-            centro.z + (e[2] * 2.0 - 1.0) * mitad,
-        );
-        salida.extend_from_slice(&[
-            posicion.x,
-            posicion.y,
-            posicion.z,
-            color.x * brillo,
-            color.y * brillo,
-            color.z * brillo,
-        ]);
-    };
-
-    for (indice, cara) in CARAS.iter().enumerate() {
-        let brillo = BRILLO[indice];
-        vertice(cara[0], brillo);
-        vertice(cara[1], brillo);
-        vertice(cara[2], brillo);
-        vertice(cara[0], brillo);
-        vertice(cara[2], brillo);
-        vertice(cara[3], brillo);
-    }
-}
-
-fn escena_de_prueba() -> Vec<f32> {
-    let mut datos = Vec::new();
-
-    // Suelo de cubos verdes.
-    let verde = Vec3::new(0.36, 0.62, 0.28);
-    let mut x = -6;
-    while x <= 6 {
-        let mut z = -6;
-        while z <= 6 {
-            empujar_cubo(&mut datos, Vec3::new(x as f32 * 2.0, -2.0, z as f32 * 2.0), 2.0, verde);
-            z += 2;
-        }
-        x += 2;
-    }
-
-    // Pilares y cubos de colores para tener referencias en el espacio.
-    let piedra = Vec3::new(0.62, 0.62, 0.66);
-    let azul = Vec3::new(0.25, 0.45, 0.85);
-    let rojo = Vec3::new(0.85, 0.30, 0.25);
-    let amarillo = Vec3::new(0.90, 0.80, 0.25);
-
-    empujar_cubo(&mut datos, Vec3::new(0.0, -1.0, 0.0), 1.0, piedra);
-    empujar_cubo(&mut datos, Vec3::new(0.0, 0.0, 0.0), 1.0, piedra);
-    empujar_cubo(&mut datos, Vec3::new(0.0, 1.0, 0.0), 1.0, azul);
-
-    empujar_cubo(&mut datos, Vec3::new(-4.0, -0.5, -6.0), 2.0, rojo);
-    empujar_cubo(&mut datos, Vec3::new(5.0, -0.25, -8.0), 2.5, amarillo);
-    empujar_cubo(&mut datos, Vec3::new(-7.0, 0.0, 3.0), 2.0, azul);
-    empujar_cubo(&mut datos, Vec3::new(8.0, 0.5, 2.0), 3.0, piedra);
-
-    datos
 }

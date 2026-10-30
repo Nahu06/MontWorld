@@ -9,6 +9,7 @@ mod clock;
 mod gfx;
 mod input;
 mod math;
+mod world;
 
 use std::error::Error;
 

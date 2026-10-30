@@ -11,6 +11,8 @@ use crate::clock::{Clock, PASO};
 use crate::gfx::Gfx;
 use crate::input::Input;
 use crate::math::Vec3;
+use crate::world::Chunk;
+use crate::world::meshing;
 
 /// Velocidad de la camara libre, en unidades por segundo.
 const VELOCIDAD: f32 = 7.0;
@@ -22,18 +24,35 @@ pub struct App {
     clock: Clock,
     input: Input,
     camara: Camera,
+    mundo: Chunk,
     /// Tiempo acumulado desde el ultimo cambio de titulo.
     tiempo_titulo: f32,
 }
 
 impl App {
     pub fn new() -> Self {
+        let mut mundo = Chunk::new();
+        mundo.generar_terreno();
+
         Self {
             gfx: None,
             clock: Clock::new(),
             input: Input::new(),
-            camara: Camera::new(Vec3::new(0.0, 2.0, 8.0)),
+            camara: Camera::new(Vec3::new(8.0, 22.0, 34.0)),
+            mundo,
             tiempo_titulo: 0.0,
+        }
+    }
+
+    /// Genera la malla del mundo y la sube a la GPU. Se llama cada vez que
+    /// se crea (o se vuelve a crear) el contexto grafico.
+    fn subir_mundo(&mut self) {
+        let vertices = meshing::malla(&self.mundo);
+        let Some(gfx) = self.gfx.as_mut() else {
+            return;
+        };
+        if let Err(err) = gfx.cargar_malla(&vertices) {
+            eprintln!("Montworld: no se pudo subir la malla del mundo: {err}");
         }
     }
 
@@ -49,6 +68,28 @@ impl App {
         }
         self.input.capturado = true;
         self.input.soltar_todo();
+        self.centrar_cursor();
+    }
+
+    /// Devuelve el cursor al centro de la ventana.
+    ///
+    /// En X11 no se puede bloquear el puntero de verdad: con solo
+    /// confinarlo, al llegar al borde la camara dejaria de girar. Recentrar
+    /// el cursor en cada movimiento da la sensacion de giro infinito.
+    fn centrar_cursor(&self) {
+        if !self.input.capturado {
+            return;
+        }
+        if let Some(gfx) = self.gfx.as_ref() {
+            let ventana = gfx.window();
+            let tamano = ventana.inner_size();
+            if tamano.width > 0 && tamano.height > 0 {
+                let _ = ventana.set_cursor_position(winit::dpi::PhysicalPosition::new(
+                    (tamano.width / 2) as i32,
+                    (tamano.height / 2) as i32,
+                ));
+            }
+        }
     }
 
     fn liberar_raton(&mut self) {
@@ -132,6 +173,9 @@ impl ApplicationHandler for App {
             Ok(gfx) => {
                 self.gfx = Some(gfx);
                 self.clock.reset();
+                self.subir_mundo();
+                // Vista inicial: el chunk entero desde fuera.
+                self.camara.mirar_a(Vec3::new(8.0, 8.0, 8.0));
             }
             Err(err) => {
                 eprintln!("Montworld: no se pudo crear la ventana o el contexto GL: {err}");
@@ -219,6 +263,7 @@ impl ApplicationHandler for App {
             && self.input.capturado
         {
             self.input.sumar_raton(delta.0 as f32, delta.1 as f32);
+            self.centrar_cursor();
         }
     }
 

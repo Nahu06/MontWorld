@@ -15,6 +15,7 @@ pub struct Vec3 {
 
 impl Vec3 {
     pub const ZERO: Self = Self::new(0.0, 0.0, 0.0);
+    #[cfg(test)]
     pub const Y: Self = Self::new(0.0, 1.0, 0.0);
 
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
@@ -89,16 +90,29 @@ impl Mat4 {
     }
 
     /// Matriz de vista mirando desde `ojo` hacia `objetivo`.
+    /// Utilidad general; la camara usa `desde_base` con su propia base.
+    #[allow(dead_code)]
     pub fn mirar_hacia(ojo: Vec3, objetivo: Vec3, arriba: Vec3) -> Self {
         let f = (objetivo - ojo).normalize();
         let s = f.cross(arriba).normalize();
         let u = s.cross(f);
+        Self::desde_base(ojo, s, u, f)
+    }
+
+    /// Matriz de vista a partir de una base ortonormal explicita.
+    ///
+    /// `derecha`, `arriba` y `adelante` deben ser perpendiculares entre si.
+    /// Se usa cuando la base ya se conoce (camara por yaw/pitch) y evita
+    /// degeneraciones al mirar casi en vertical.
+    pub fn desde_base(ojo: Vec3, derecha: Vec3, arriba: Vec3, adelante: Vec3) -> Self {
+        // En column-major, cada grupo de 4 flotantes es una columna. Las
+        // filas de la rotacion son (derecha, arriba, -adelante).
         Self {
             m: [
-                s.x, s.y, s.z, 0.0,
-                u.x, u.y, u.z, 0.0,
-                -f.x, -f.y, -f.z, 0.0,
-                -s.dot(ojo), -u.dot(ojo), f.dot(ojo), 1.0,
+                derecha.x, arriba.x, -adelante.x, 0.0,
+                derecha.y, arriba.y, -adelante.y, 0.0,
+                derecha.z, arriba.z, -adelante.z, 0.0,
+                -derecha.dot(ojo), -arriba.dot(ojo), adelante.dot(ojo), 1.0,
             ],
         }
     }
@@ -153,11 +167,11 @@ mod tests {
     }
 
     #[test]
-    fn mirar_a_la_derecha_deja_el_punto_a_la_izquierda() {
+    fn mirar_al_este_deja_el_norte_a_la_izquierda() {
         let ojo = Vec3::new(0.0, 0.0, 0.0);
         let vista = Mat4::mirar_hacia(ojo, Vec3::new(1.0, 0.0, 0.0), Vec3::Y);
-        // Un punto al norte (+Z) del ojo debe quedar a la izquierda (-X).
-        let p = transformar(&vista, Vec3::new(0.0, 0.0, 1.0));
+        // Si se mira al este (+X), el norte (-Z) debe quedar a la izquierda.
+        let p = transformar(&vista, Vec3::new(0.0, 0.0, -1.0));
         assert!(p[0] < -0.99, "x = {}", p[0]);
     }
 
