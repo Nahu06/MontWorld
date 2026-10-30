@@ -12,21 +12,43 @@ use std::collections::{HashMap, HashSet};
 
 use super::block::Bloque;
 use super::chunk::{Chunk, LADO_I};
+use super::guardado::Cambios;
 use super::meshing;
 
 pub struct Mundo {
     radio: i32,
     chunks: HashMap<(i32, i32), Chunk>,
     sucios: HashSet<(i32, i32)>,
+    /// Bloques modificados respecto al terreno generado.
+    cambios: Cambios,
 }
 
 impl Mundo {
     pub fn new(radio: i32) -> Self {
+        Self::con_cambios(radio, Cambios::new())
+    }
+
+    /// Mundo que arranca con una lista de bloques ya modificados.
+    pub fn con_cambios(radio: i32, cambios: Cambios) -> Self {
         Self {
             radio,
             chunks: HashMap::new(),
             sucios: HashSet::new(),
+            cambios,
         }
+    }
+
+    /// Bloques modificados, para guardar la partida.
+    pub fn cambios(&self) -> &Cambios {
+        &self.cambios
+    }
+
+    /// Sustituye los cambios y olvida los chunks cargados: se regenerarán
+    /// al volver a pedirlos, ya con los cambios aplicados.
+    pub fn reemplazar_cambios(&mut self, cambios: Cambios) {
+        self.cambios = cambios;
+        self.chunks.clear();
+        self.sucios.clear();
     }
 
     /// Chunk al que pertenece una coordenada global horizontal.
@@ -53,6 +75,7 @@ impl Mundo {
             return false;
         };
         chunk.poner(x.rem_euclid(LADO_I), y, z.rem_euclid(LADO_I), bloque);
+        self.cambios.insert((x, y, z), bloque);
 
         self.marcar_sucio(x, z);
         true
@@ -126,8 +149,21 @@ impl Mundo {
         let mut nuevos = Vec::new();
         for clave in deseados {
             if !self.chunks.contains_key(&clave) {
-                self.chunks
-                    .insert(clave, Chunk::generar(clave.0, clave.1));
+                let mut chunk = Chunk::generar(clave.0, clave.1);
+
+                // Reaplicar los bloques que el jugador ya había cambiado.
+                for ((x, y, z), bloque) in &self.cambios {
+                    if Self::clave_de(*x, *z) == clave {
+                        chunk.poner(
+                            x.rem_euclid(LADO_I),
+                            *y,
+                            z.rem_euclid(LADO_I),
+                            *bloque,
+                        );
+                    }
+                }
+
+                self.chunks.insert(clave, chunk);
                 nuevos.push(clave);
             }
         }
@@ -200,6 +236,21 @@ mod tests {
             );
             assert!(vertice[2] >= 0.0 && vertice[2] <= 16.0);
         }
+    }
+
+    #[test]
+    fn los_cambios_se_reaplican_al_recargar_el_chunk() {
+        let mut mundo = Mundo::new(0);
+        mundo.ajustar((0, 0));
+        mundo.poner(5, 10, 5, Bloque::Piedra);
+        mundo.poner(6, 10, 5, Bloque::Aire);
+
+        let cambios = mundo.cambios().clone();
+        let mut recargado = Mundo::con_cambios(0, cambios);
+        recargado.ajustar((0, 0));
+
+        assert_eq!(recargado.bloque(5, 10, 5), Bloque::Piedra);
+        assert_eq!(recargado.bloque(6, 10, 5), Bloque::Aire);
     }
 
     #[test]

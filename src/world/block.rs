@@ -16,8 +16,7 @@ pub enum Bloque {
 }
 
 impl Bloque {
-    /// Se usara al cargar mundos guardados y al importar datos externos.
-    #[allow(dead_code)]
+    /// Convierte el byte guardado en disco al tipo de bloque.
     pub fn desde_byte(valor: u8) -> Self {
         match valor {
             1 => Self::Tierra,

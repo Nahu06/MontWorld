@@ -4,6 +4,8 @@
 //! del juego y mantiene sincronizadas las mallas de los chunks con el
 //! estado de la simulación.
 
+use std::path::PathBuf;
+
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -11,18 +13,21 @@ use winit::keyboard::{Key, NamedKey, PhysicalKey};
 use winit::window::{CursorGrabMode, WindowId};
 
 use crate::base::clock::{Clock, PASO};
-use crate::base::math::Vec3;
 use crate::entrada::Input;
 use crate::juego::Juego;
 use crate::render::Render;
+use crate::world::guardado;
 
 pub struct App {
     render: Option<Render>,
     clock: Clock,
     entrada: Input,
     juego: Juego,
+    ruta_partida: PathBuf,
     /// Tiempo acumulado desde el último cambio de título.
     tiempo_titulo: f32,
+    /// Tiempo acumulado desde el último autoguardado.
+    tiempo_guardado: f32,
 }
 
 impl App {
@@ -32,7 +37,22 @@ impl App {
             clock: Clock::new(),
             entrada: Input::new(),
             juego: Juego::nuevo(),
+            ruta_partida: guardado::ruta_por_defecto(),
             tiempo_titulo: 0.0,
+            tiempo_guardado: 0.0,
+        }
+    }
+
+    /// Escribe la partida en disco (posición, cámara y bloques cambiados).
+    fn guardar_partida(&self) {
+        let partida = self.juego.partida();
+        match guardado::guardar(&self.ruta_partida, &partida) {
+            Ok(()) => println!(
+                "Montworld: partida guardada en {} ({} cambios)",
+                self.ruta_partida.display(),
+                partida.cambios.len()
+            ),
+            Err(err) => eprintln!("Montworld: no se pudo guardar la partida: {err}"),
         }
     }
 
@@ -115,6 +135,13 @@ impl App {
 
         self.aplicar_cambios();
 
+        // Autoguardado periódico, además del guardado al salir.
+        self.tiempo_guardado += frame.delta;
+        if self.tiempo_guardado >= 20.0 {
+            self.tiempo_guardado = 0.0;
+            self.guardar_partida();
+        }
+
         let Some(render) = self.render.as_mut() else {
             return;
         };
@@ -147,8 +174,22 @@ impl ApplicationHandler for App {
                 self.render = Some(render);
                 self.clock.reset();
 
-                // Vista inicial: el mundo desde fuera y algo elevada.
-                self.juego.jugador.camara.mirar_a(Vec3::new(8.0, 8.0, 8.0));
+                // Recuperar la partida anterior, si existe.
+                match guardado::cargar(&self.ruta_partida) {
+                    Ok(partida) => {
+                        println!(
+                            "Montworld: partida cargada de {} ({} cambios)",
+                            self.ruta_partida.display(),
+                            partida.cambios.len()
+                        );
+                        self.juego.cargar(partida);
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(err) => {
+                        eprintln!("Montworld: no se pudo cargar la partida: {err}");
+                    }
+                }
+
                 self.juego.reiniciar_streaming();
                 self.aplicar_cambios();
             }
@@ -248,6 +289,10 @@ impl ApplicationHandler for App {
             self.entrada.sumar_raton(delta.0 as f32, delta.1 as f32);
             self.centrar_cursor();
         }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.guardar_partida();
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {

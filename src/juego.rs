@@ -9,6 +9,7 @@ use crate::base::math::Vec3;
 use crate::entrada::Input;
 use crate::jugador::Jugador;
 use crate::world::block::Bloque;
+use crate::world::guardado::Partida;
 use crate::world::{Mundo, generacion, raycast};
 
 /// Alcance del rayo para romper y colocar bloques, en bloques.
@@ -73,6 +74,33 @@ impl Juego {
     pub fn reiniciar_streaming(&mut self) {
         self.centro = None;
         self.actualizar_chunks();
+    }
+
+    /// Estado actual para guardar la partida.
+    pub fn partida(&self) -> Partida {
+        let p = self.jugador.posicion;
+        Partida {
+            posicion: [p.x, p.y, p.z],
+            yaw: self.jugador.camara.yaw,
+            pitch: self.jugador.camara.pitch,
+            cambios: self.mundo.cambios().clone(),
+        }
+    }
+
+    /// Carga una partida: recoloca al jugador y aplica sus cambios.
+    /// Los chunks se recargan en el siguiente paso.
+    pub fn cargar(&mut self, partida: Partida) {
+        self.jugador.colocar_en(
+            Vec3::new(
+                partida.posicion[0],
+                partida.posicion[1],
+                partida.posicion[2],
+            ),
+            partida.yaw,
+            partida.pitch,
+        );
+        self.mundo.reemplazar_cambios(partida.cambios);
+        self.centro = None;
     }
 
     /// Retira los cambios de chunks pendientes de aplicar.

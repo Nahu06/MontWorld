@@ -82,6 +82,8 @@ impl Camara {
     }
 
     /// Orienta la cámara hacia un punto del mundo.
+    /// Útil para vistas de cámara fijas (tests y futuras escenas).
+    #[allow(dead_code)]
     pub fn mirar_a(&mut self, objetivo: Vec3) {
         let direccion = (objetivo - self.posicion).normalize();
         self.yaw = direccion.x.atan2(-direccion.z);
@@ -125,6 +127,17 @@ impl Jugador {
         };
         jugador.sincronizar_camara();
         jugador
+    }
+
+    /// Coloca el cuerpo y la cámara en un estado concreto (al cargar una
+    /// partida).
+    pub fn colocar_en(&mut self, posicion: Vec3, yaw: f32, pitch: f32) {
+        self.posicion = posicion;
+        self.velocidad = Vec3::ZERO;
+        self.en_suelo = false;
+        self.camara.yaw = yaw;
+        self.camara.pitch = pitch.clamp(-LIMITE_PITCH, LIMITE_PITCH);
+        self.sincronizar_camara();
     }
 
     /// Copia la posición del cuerpo a la cámara (a la altura de los ojos).

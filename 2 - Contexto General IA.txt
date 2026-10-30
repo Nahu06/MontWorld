@@ -31,12 +31,12 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 3. ESTADO GENERAL
 ------------------------------------------------------------
 Fase: prototipo (Fase 1 en curso)
-Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz, mundo de 5×5 chunks
-(80×80 bloques) con generación continua y carga dinámica, jugador con
-gravedad, colisiones, salto y sprint, y romper/colocar bloques con
-raycast y mira. Va a 60 fps en el PC de referencia.
-No funciona / falta: texturas, guardado del mundo, inventario,
-controles táctiles y build de Android.
+Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con generación
+continua y carga dinámica, jugador con gravedad, colisiones, salto y
+sprint, romper/colocar bloques con raycast y mira, y guardado/carga de
+la partida con autoguardado. Va a 60 fps en el PC de referencia.
+No funciona / falta: texturas, inventario/barra de bloques, controles
+táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -116,6 +116,7 @@ Montworld/
                         seguimiento de chunks sucios
       meshing.rs        Caras visibles y construcción de la malla
       raycast.rs        Rayo de vóxeles para romper y colocar
+      guardado.rs       Guardado y carga de la partida (formato propio)
   assets/
     icono.png           Icono del lanzador
   target/               Compilación (ignorada por Git)
@@ -189,7 +190,24 @@ Física actual (v0.0.7):
 - Ya no se vuela libremente: para explorar hay que caminar o saltar.
 
 ------------------------------------------------------------
-11. REGISTRO DE ACTUALIZACIÓN
+11. GUARDADO
+------------------------------------------------------------
+Archivo: ~/.local/share/montworld/partida.mnt
+(respeta XDG_DATA_HOME si está definido).
+
+- Solo se guardan los bloques modificados respecto al terreno
+  generado, más la posición y los ángulos de la cámara.
+- Formato binario propio, little-endian: firma "MONT", versión,
+  posición (3 × f32), yaw, pitch, cantidad de cambios y, por cada
+  cambio, x/y/z (i32) + bloque (u8).
+- Se guarda al salir y automáticamente cada 20 segundos.
+- La escritura es atómica: primero a `partida.mnt.tmp` y luego
+  renombrado.
+- Al cargar, los cambios se reaplican cuando se genera cada chunk,
+  incluso fuera de la zona cargada en ese momento.
+
+------------------------------------------------------------
+12. REGISTRO DE ACTUALIZACIÓN
 ------------------------------------------------------------
 Última actualización: 2026-10-30
 Actualizado por: IA
@@ -216,3 +234,5 @@ Añadida la regla 6 (modularidad obligatoria) y la sección 7 de
 arquitectura por capas.
 v0.0.7: gravedad, colisiones AABB, salto y sprint; controles y física
 documentados en la sección 10. Probado por el usuario.
+v0.0.8: guardado y carga de partida (sección 11). Probado por el
+usuario: conserva posición y bloques al reabrir.
