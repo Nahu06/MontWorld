@@ -12,7 +12,8 @@ use crate::gfx::Gfx;
 use crate::input::Input;
 use crate::math::Vec3;
 use crate::world::block::Bloque;
-use crate::world::{Chunk, meshing, raycast};
+use crate::world::chunk::LADO_I;
+use crate::world::{Mundo, raycast};
 
 /// Velocidad de la camara libre, en unidades por segundo.
 const VELOCIDAD: f32 = 7.0;
@@ -26,35 +27,89 @@ pub struct App {
     clock: Clock,
     input: Input,
     camara: Camera,
-    mundo: Chunk,
+    mundo: Mundo,
+    /// Chunk en el que esta la camara, para saber cuando recargar.
+    centro: Option<(i32, i32)>,
     /// Tiempo acumulado desde el ultimo cambio de titulo.
     tiempo_titulo: f32,
 }
 
 impl App {
     pub fn new() -> Self {
-        let mut mundo = Chunk::new();
-        mundo.generar_terreno();
-
         Self {
             gfx: None,
             clock: Clock::new(),
             input: Input::new(),
-            camara: Camera::new(Vec3::new(8.5, 11.0, 14.5)),
-            mundo,
+            camara: Camera::new(Vec3::new(8.5, 18.0, 30.0)),
+            mundo: Mundo::new(2),
+            centro: None,
             tiempo_titulo: 0.0,
         }
     }
 
-    /// Genera la malla del mundo y la sube a la GPU. Se llama cada vez que
-    /// se crea (o se vuelve a crear) el contexto grafico.
-    fn subir_mundo(&mut self) {
-        let vertices = meshing::malla(&self.mundo);
+    /// Carga y descarga chunks alrededor de la camara.
+    ///
+    /// Solo hace trabajo cuando la camara cambia de chunk, asi que se
+    /// puede llamar en cada paso de simulacion.
+    fn sincronizar_chunks(&mut self) {
+        let p = self.camara.posicion;
+        let centro = Mundo::clave_de(p.x.floor() as i32, p.z.floor() as i32);
+        if self.centro == Some(centro) {
+            return;
+        }
+        self.centro = Some(centro);
+
+        let (nuevos, quitados) = self.mundo.ajustar(centro);
+        let mallas: Vec<_> = nuevos
+            .iter()
+            .map(|clave| (*clave, self.mundo.malla_de(*clave)))
+            .collect();
+
         let Some(gfx) = self.gfx.as_mut() else {
             return;
         };
-        if let Err(err) = gfx.cargar_malla(&vertices) {
-            eprintln!("Montworld: no se pudo subir la malla del mundo: {err}");
+        for clave in quitados {
+            gfx.quitar_chunk(clave);
+        }
+        for (clave, datos) in mallas {
+            if let Err(err) = gfx.subir_chunk(clave, &datos) {
+                eprintln!("Montworld: no se pudo subir el chunk {clave:?}: {err}");
+            }
+        }
+    }
+
+    /// Rehace la malla de un chunk concreto (si esta cargado).
+    fn refrescar_chunk(&mut self, clave: (i32, i32)) {
+        if !self.mundo.tiene_chunk(clave) {
+            return;
+        }
+        let datos = self.mundo.malla_de(clave);
+        if let Some(gfx) = self.gfx.as_mut()
+            && let Err(err) = gfx.subir_chunk(clave, &datos)
+        {
+            eprintln!("Montworld: no se pudo actualizar el chunk {clave:?}: {err}");
+        }
+    }
+
+    /// Rehace el chunk afectado por un cambio de bloque y, si el bloque
+    /// estaba en un borde, tambien el vecino correspondiente.
+    fn refrescar_alrededor(&mut self, x: i32, z: i32) {
+        let (cx, cz) = Mundo::clave_de(x, z);
+        self.refrescar_chunk((cx, cz));
+
+        let lx = x.rem_euclid(LADO_I);
+        let lz = z.rem_euclid(LADO_I);
+        if lx == 0 {
+            self.refrescar_chunk((cx - 1, cz));
+        }
+        if lx == LADO_I - 1 {
+            self.refrescar_chunk((cx + 1, cz));
+        }
+        if lz == 0 {
+            self.refrescar_chunk((cx, cz - 1));
+        }
+        if lz == LADO_I - 1 {
+            self.refrescar_chunk((cx, cz + 1));
         }
     }
 
@@ -64,14 +119,14 @@ impl App {
             self.camara.posicion,
             self.camara.adelante(),
             ALCANCE,
-            &self.mundo,
+            |x, y, z| self.mundo.bloque(x, y, z),
         ) else {
             return;
         };
 
         let [x, y, z] = impacto.bloque;
         self.mundo.poner(x, y, z, Bloque::Aire);
-        self.subir_mundo();
+        self.refrescar_alrededor(x, z);
     }
 
     /// Coloca un bloque en la cara apuntada.
@@ -80,7 +135,7 @@ impl App {
             self.camara.posicion,
             self.camara.adelante(),
             ALCANCE,
-            &self.mundo,
+            |x, y, z| self.mundo.bloque(x, y, z),
         ) else {
             return;
         };
@@ -101,9 +156,8 @@ impl App {
             return;
         }
 
-        if self.mundo.bloque(x, y, z).es_aire() {
-            self.mundo.poner(x, y, z, Bloque::Piedra);
-            self.subir_mundo();
+        if self.mundo.bloque(x, y, z).es_aire() && self.mundo.poner(x, y, z, Bloque::Piedra) {
+            self.refrescar_alrededor(x, z);
         }
     }
 
@@ -187,6 +241,8 @@ impl App {
             self.camara
                 .mover(direccion.normalize() * (velocidad * PASO));
         }
+
+        self.sincronizar_chunks();
     }
 
     fn frame(&mut self) {
@@ -207,8 +263,11 @@ impl App {
             self.tiempo_titulo = 0.0;
             let p = self.camara.posicion;
             gfx.window().set_title(&format!(
-                "Montworld - {fps} FPS - ({:.1}, {:.1}, {:.1})",
-                p.x, p.y, p.z
+                "Montworld - {fps} FPS - ({:.1}, {:.1}, {:.1}) - {} chunks",
+                p.x,
+                p.y,
+                p.z,
+                self.mundo.cantidad()
             ));
         }
     }
@@ -224,9 +283,10 @@ impl ApplicationHandler for App {
             Ok(gfx) => {
                 self.gfx = Some(gfx);
                 self.clock.reset();
-                self.subir_mundo();
-                // Vista inicial: el chunk entero desde fuera.
+                // Vista inicial: el mundo desde fuera y algo elevada.
                 self.camara.mirar_a(Vec3::new(8.0, 8.0, 8.0));
+                self.centro = None;
+                self.sincronizar_chunks();
             }
             Err(err) => {
                 eprintln!("Montworld: no se pudo crear la ventana o el contexto GL: {err}");

@@ -1,11 +1,12 @@
-//! El mundo: bloques y chunk.
+//! El mundo: bloques, chunks y raycast.
 //!
-//! De momento el mundo es un unico chunk de prueba. La idea es que este
-//! modulo crezca con varios chunks, generacion y guardado.
+//! El punto de entrada habitual es `Mundo`, que agrupa los chunks cargados
+//! y resuelve las coordenadas globales.
 
 pub mod block;
 pub mod chunk;
 pub mod meshing;
+pub mod mundo;
 pub mod raycast;
 
-pub use chunk::Chunk;
+pub use mundo::Mundo;

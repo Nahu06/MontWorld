@@ -42,7 +42,8 @@ FASE 1 - PROTOTIPO JUGABLE
     (2026-10-30)
 [ ] Atlas de texturas y coordenadas UV (sustituir los colores planos)
 [x] Romper y colocar bloques con raycast (2026-10-30)
-[ ] Mundo dividido en chunks con carga/descarga alrededor del jugador
+[x] Mundo dividido en chunks con carga/descarga alrededor del jugador
+    (2026-10-30)
 [ ] Guardado y carga del mundo
 
 ------------------------------------------------------------
@@ -58,7 +59,8 @@ FASE 2 - CONTENIDO
 ------------------------------------------------------------
 FASE 3 - PULIDO Y RENDIMIENTO
 ------------------------------------------------------------
-[ ] Medir fps reales en PC y en Galaxy A06
+[~] Medir fps reales en PC y en Galaxy A06
+    (PC: 60 fps con 25 chunks, 2026-10-30; falta el móvil)
 [ ] Optimizaciones: greedy meshing, frustum culling, niebla,
     reducción de draw calls
 [ ] Sonido y música
@@ -89,6 +91,9 @@ v0.0.3 - 2026-10-30 - Primer chunk de 16×16×16: bloques de 1 byte,
          (el mundo orbitaba al girar) y la estabilidad cerca del cenit.
 v0.0.4 - 2026-10-30 - Romper y colocar bloques con raycast de vóxeles,
          mira en pantalla y regeneración inmediata de la malla.
+v0.0.5 - 2026-10-30 - Mundo de 5×5 chunks con generación continua,
+         carga/descarga alrededor de la cámara y una malla por chunk.
+         60 fps confirmados en el PC.
 
 ------------------------------------------------------------
 REGISTRO
@@ -109,4 +114,7 @@ REGISTRO
              probado por el usuario.
              v0.0.4: romper y colocar bloques con raycast y mira.
              Probado y confirmado por el usuario.
-             Siguiente paso: mundo con varios chunks y medición de fps.
+             v0.0.5: mundo de 5×5 chunks con generación continua y
+             carga/descarga. Corregido el meshing (usaba coordenadas
+             locales y apilaba los chunks). 60 fps en el PC.
+             Siguiente paso: atlas de texturas o guardado del mundo.

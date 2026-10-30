@@ -31,11 +31,12 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 3. ESTADO GENERAL
 ------------------------------------------------------------
 Fase: prototipo (Fase 1 en curso)
-Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz con vsync, cámara
-libre en primera persona, un chunk de 16×16×16 con relieve y meshing
-de caras visibles, y romper/colocar bloques con raycast y mira.
-No funciona / falta: varios chunks, texturas, guardado, controles
-táctiles y build de Android.
+Funciona hoy: ventana OpenGL 3.3, bucle a 60 Hz, cámara libre en
+primera persona, mundo de 5×5 chunks (80×80 bloques) con generación
+continua y carga dinámica, romper/colocar bloques con raycast y mira.
+Va a 60 fps en el PC de referencia.
+No funciona / falta: texturas, guardado del mundo, colisiones,
+controles táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -98,6 +99,7 @@ Montworld/
       mod.rs            Punto de entrada del mundo
       block.rs          Tipos de bloque y colores
       chunk.rs          Chunk 16×16×16 y generación de terreno
+      mundo.rs          Rejilla de chunks, carga/descarga y mallas
       meshing.rs        Caras visibles y construcción de la malla
       raycast.rs        Rayo de vóxeles para romper y colocar
   assets/
@@ -157,3 +159,6 @@ v0.0.3: primer chunk con meshing de caras visibles; corregido el giro
 de cámara y confirmado por el usuario.
 v0.0.4: romper/colocar bloques con raycast y mira; probado por el
 usuario.
+v0.0.5: mundo 5×5 chunks con carga dinámica; corregido el meshing
+(coordenadas locales apilaban los chunks). 60 fps en el PC,
+confirmado por el usuario.

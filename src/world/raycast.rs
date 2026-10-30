@@ -7,7 +7,7 @@
 
 use crate::math::Vec3;
 
-use super::chunk::Chunk;
+use super::block::Bloque;
 
 /// Resultado de un impacto: el bloque golpeado y la cara por la que entro
 /// el rayo (normal entera, por ejemplo [0, 1, 0] si vino de arriba).
@@ -17,7 +17,10 @@ pub struct Impacto {
     pub normal: [i32; 3],
 }
 
-pub fn lanzar(origen: Vec3, direccion: Vec3, alcance: f32, chunk: &Chunk) -> Option<Impacto> {
+pub fn lanzar<F>(origen: Vec3, direccion: Vec3, alcance: f32, bloque: F) -> Option<Impacto>
+where
+    F: Fn(i32, i32, i32) -> Bloque,
+{
     let dir = direccion.normalize();
     if dir.length() == 0.0 {
         return None;
@@ -66,7 +69,7 @@ pub fn lanzar(origen: Vec3, direccion: Vec3, alcance: f32, chunk: &Chunk) -> Opt
     ];
 
     // Si la camara arranca dentro de un bloque solido, se devuelve sin cara.
-    if !chunk.bloque(x, y, z).es_aire() {
+    if !bloque(x, y, z).es_aire() {
         return Some(Impacto {
             bloque: [x, y, z],
             normal: [0, 0, 0],
@@ -103,7 +106,7 @@ pub fn lanzar(origen: Vec3, direccion: Vec3, alcance: f32, chunk: &Chunk) -> Opt
         };
         siguiente[eje] += delta[eje];
 
-        if !chunk.bloque(x, y, z).es_aire() {
+        if !bloque(x, y, z).es_aire() {
             return Some(Impacto {
                 bloque: [x, y, z],
                 normal,
@@ -124,7 +127,7 @@ pub fn vecino(impacto: &Impacto) -> [i32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::block::Bloque;
+    use crate::world::chunk::Chunk;
 
     fn chunk_con_bloque(x: i32, y: i32, z: i32) -> Chunk {
         let mut chunk = Chunk::new();
@@ -139,7 +142,7 @@ mod tests {
             Vec3::new(8.5, 20.0, 8.5),
             Vec3::new(0.0, -1.0, 0.0),
             30.0,
-            &chunk,
+            |x, y, z| chunk.bloque(x, y, z),
         )
         .expect("deberia impactar");
 
@@ -154,7 +157,7 @@ mod tests {
             Vec3::new(20.0, 8.5, 8.5),
             Vec3::new(-1.0, 0.0, 0.0),
             30.0,
-            &chunk,
+            |x, y, z| chunk.bloque(x, y, z),
         )
         .expect("deberia impactar");
 
@@ -179,7 +182,7 @@ mod tests {
                 Vec3::new(8.5, 20.0, 8.5),
                 Vec3::new(0.0, -1.0, 0.0),
                 30.0,
-                &chunk
+                |x, y, z| chunk.bloque(x, y, z)
             ),
             None
         );
@@ -193,7 +196,7 @@ mod tests {
                 Vec3::new(8.5, 20.0, 8.5),
                 Vec3::new(0.0, -1.0, 0.0),
                 5.0,
-                &chunk
+                |x, y, z| chunk.bloque(x, y, z)
             ),
             None
         );

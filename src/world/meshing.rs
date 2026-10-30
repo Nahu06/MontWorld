@@ -5,9 +5,8 @@
 //! dibujar. Cada vertice guarda posicion y color (el sombreado por cara
 //! da sensacion de volumen sin iluminacion).
 
-use super::chunk::{Chunk, LADO};
-#[cfg(test)]
 use super::block::Bloque;
+use super::chunk::{Chunk, LADO};
 
 struct Cara {
     /// Desplazamiento hasta el bloque vecino, para saber si hay aire.
@@ -87,8 +86,15 @@ const CARAS: [Cara; 6] = [
     },
 ];
 
-/// Devuelve los vertices (posicion xyz + color rgb) de las caras visibles.
-pub fn malla(chunk: &Chunk) -> Vec<f32> {
+/// Construye la malla de un chunk colocada en `origen` (coordenadas
+/// globales del chunk) y consultando los vecinos con `obtener`.
+///
+/// `obtener` recibe coordenadas locales del chunk (pueden ser -1 o `LADO`),
+/// lo que permite que dos chunks vecinos no dibujen la pared que comparten.
+pub fn malla_con<F>(chunk: &Chunk, origen: [f32; 3], obtener: F) -> Vec<f32>
+where
+    F: Fn(i32, i32, i32) -> Bloque,
+{
     let mut vertices = Vec::with_capacity(4096);
 
     for y in 0..LADO as i32 {
@@ -102,13 +108,10 @@ pub fn malla(chunk: &Chunk) -> Vec<f32> {
                 let color = bloque.color();
 
                 for cara in &CARAS {
-                    let vecino = chunk.bloque(
-                        x + cara.normal[0],
-                        y + cara.normal[1],
-                        z + cara.normal[2],
-                    );
+                    let vecino =
+                        obtener(x + cara.normal[0], y + cara.normal[1], z + cara.normal[2]);
                     if vecino.es_aire() {
-                        empujar_cara(&mut vertices, x, y, z, cara, color);
+                        empujar_cara(&mut vertices, origen, x, y, z, cara, color);
                     }
                 }
             }
@@ -118,8 +121,20 @@ pub fn malla(chunk: &Chunk) -> Vec<f32> {
     vertices
 }
 
-fn empujar_cara(salida: &mut Vec<f32>, x: i32, y: i32, z: i32, cara: &Cara, color: crate::math::Vec3) {
-    let base = [x as f32, y as f32, z as f32];
+fn empujar_cara(
+    salida: &mut Vec<f32>,
+    origen: [f32; 3],
+    x: i32,
+    y: i32,
+    z: i32,
+    cara: &Cara,
+    color: crate::math::Vec3,
+) {
+    let base = [
+        origen[0] + x as f32,
+        origen[1] + y as f32,
+        origen[2] + z as f32,
+    ];
 
     let mut vertice = |esquina: [f32; 3]| {
         salida.extend_from_slice(&[
@@ -156,6 +171,11 @@ mod tests {
     const FLOATS_POR_VERTICE: usize = 6;
     const VERTICES_POR_CARA: usize = 6;
 
+    /// Malla de un chunk aislado: fuera de el todo es aire.
+    fn malla(chunk: &Chunk) -> Vec<f32> {
+        malla_con(chunk, [0.0, 0.0, 0.0], |x, y, z| chunk.bloque(x, y, z))
+    }
+
     #[test]
     fn un_bloque_aislado_genera_seis_caras() {
         let chunk = chunk_con_bloque(8, 8, 8);
@@ -186,20 +206,17 @@ mod tests {
     }
 
     #[test]
-    fn el_terreno_tiene_bloques_y_aire_arriba() {
-        let mut chunk = Chunk::new();
-        chunk.generar_terreno();
-        let mut solidos = 0;
-        for y in 0..LADO as i32 {
-            for z in 0..LADO as i32 {
-                for x in 0..LADO as i32 {
-                    if !chunk.bloque(x, y, z).es_aire() {
-                        solidos += 1;
-                    }
-                }
+    fn un_bloque_pegado_al_borde_no_dibuja_la_cara_vecina() {
+        // Un bloque en el borde con un vecino solido fuera del chunk no
+        // debe generar la cara que comparten.
+        let chunk = chunk_con_bloque(15, 8, 8);
+        let datos = malla_con(&chunk, [0.0, 0.0, 0.0], |x, y, z| {
+            if x == 16 && y == 8 && z == 8 {
+                Bloque::Piedra
+            } else {
+                chunk.bloque(x, y, z)
             }
-        }
-        assert!(solidos > 0);
-        assert_eq!(chunk.bloque(8, 15, 8), Bloque::Aire);
+        });
+        assert_eq!(datos.len() / FLOATS_POR_VERTICE, 5 * VERTICES_POR_CARA);
     }
 }

@@ -7,6 +7,7 @@
 //! La geometria que se dibuja es la malla de un chunk, subida a la GPU como
 //! un unico buffer de posicion + color.
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::num::NonZeroU32;
 
@@ -83,7 +84,7 @@ pub struct Gfx {
 
     programa: glow::Program,
     u_vista_proy: Option<glow::UniformLocation>,
-    malla: Option<Malla>,
+    mallas: HashMap<(i32, i32), Malla>,
     mira: Malla,
     ancho: u32,
     alto: u32,
@@ -196,7 +197,7 @@ impl Gfx {
             window,
             programa,
             u_vista_proy: None,
-            malla: None,
+            mallas: HashMap::new(),
             mira,
             ancho: tamano.width.max(1),
             alto: tamano.height.max(1),
@@ -219,14 +220,24 @@ impl Gfx {
         }
     }
 
-    /// Sube una malla nueva a la GPU, sustituyendo la anterior.
-    pub fn cargar_malla(&mut self, datos: &[f32]) -> Result<(), Box<dyn Error>> {
+    /// Sube (o reemplaza) la malla de un chunk.
+    pub fn subir_chunk(
+        &mut self,
+        clave: (i32, i32),
+        datos: &[f32],
+    ) -> Result<(), Box<dyn Error>> {
         let nueva = Malla::subir(&self.gl, datos)?;
-        if let Some(anterior) = self.malla.replace(nueva) {
+        if let Some(anterior) = self.mallas.insert(clave, nueva) {
             anterior.borrar(&self.gl);
         }
-        println!("Montworld: malla con {} vertices", datos.len() / 6);
         Ok(())
+    }
+
+    /// Elimina de la GPU la malla de un chunk descargado.
+    pub fn quitar_chunk(&mut self, clave: (i32, i32)) {
+        if let Some(malla) = self.mallas.remove(&clave) {
+            malla.borrar(&self.gl);
+        }
     }
 
     pub fn render(&mut self, camara: &Camera) {
@@ -237,7 +248,7 @@ impl Gfx {
             self.gl.clear_color(0.53, 0.72, 0.92, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
-            if self.malla.is_none() {
+            if self.mallas.is_empty() {
                 let _ = self.surface.swap_buffers(&self.context);
                 return;
             }
@@ -253,7 +264,7 @@ impl Gfx {
                     .uniform_matrix_4_f32_slice(Some(ubicacion), false, &vista_proy.m);
             }
 
-            if let Some(malla) = self.malla.as_ref() {
+            for malla in self.mallas.values() {
                 malla.dibujar(&self.gl);
             }
 
@@ -273,7 +284,7 @@ impl Gfx {
 
 impl Drop for Gfx {
     fn drop(&mut self) {
-        if let Some(malla) = self.malla.take() {
+        for (_, malla) in self.mallas.drain() {
             malla.borrar(&self.gl);
         }
         self.mira.borrar(&self.gl);
