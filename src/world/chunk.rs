@@ -49,9 +49,17 @@ impl Chunk {
 
         for z in 0..LADO_I {
             for x in 0..LADO_I {
-                let altura = generacion::altura(cx * LADO_I + x, cz * LADO_I + z);
+                let gx = cx * LADO_I + x;
+                let gz = cz * LADO_I + z;
+                let altura = generacion::altura(gx, gz);
 
                 for y in 0..altura {
+                    // Cuevas: se vacía el interior, nunca el fondo ni la
+                    // capa de superficie.
+                    if y > 0 && y < altura - 1 && generacion::cueva(gx, y, gz) {
+                        continue;
+                    }
+
                     let bloque = if y == 0 {
                         Bloque::RocaMadre
                     } else if y == altura - 1 {
@@ -67,7 +75,63 @@ impl Chunk {
             }
         }
 
+        chunk.plantar_arboles(cx, cz);
         chunk
+    }
+
+    /// Planta los árboles cuya columna cae dentro de este chunk.
+    ///
+    /// Se exige un margen de 2 bloques al borde para que la copa no se
+    /// corte, y así cada árbol pertenece a un único chunk: los vecinos no
+    /// lo duplican.
+    fn plantar_arboles(&mut self, cx: i32, cz: i32) {
+        const MARGEN: i32 = 2;
+
+        for z in MARGEN..LADO_I - MARGEN {
+            for x in MARGEN..LADO_I - MARGEN {
+                let gx = cx * LADO_I + x;
+                let gz = cz * LADO_I + z;
+                if !generacion::hay_arbol(gx, gz) {
+                    continue;
+                }
+
+                let superficie = generacion::altura(gx, gz);
+                // Nada de árboles en la playa ni pegados al techo.
+                if superficie <= 5 {
+                    continue;
+                }
+
+                let tronco = generacion::altura_arbol(gx, gz);
+                if superficie + tronco + 2 >= LADO_I {
+                    continue;
+                }
+                if self.bloque(x, superficie - 1, z) != Bloque::Hierba {
+                    continue;
+                }
+
+                for i in 0..tronco {
+                    self.poner(x, superficie + i, z, Bloque::Madera);
+                }
+
+                // Copa: dos capas anchas y dos más estrechas arriba.
+                let centro = superficie + tronco;
+                for dy in -2..=1 {
+                    let radio = if dy <= 0 { 2 } else { 1 };
+                    for dz in -radio..=radio {
+                        for dx in -radio..=radio {
+                            // No tapar el tronco por dentro.
+                            if dx == 0 && dz == 0 && dy < 0 {
+                                continue;
+                            }
+                            let (lx, ly, lz) = (x + dx, centro + dy, z + dz);
+                            if self.bloque(lx, ly, lz).es_aire() {
+                                self.poner(lx, ly, lz, Bloque::Hojas);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -90,6 +154,36 @@ mod tests {
         }
         assert!(solidos > 0);
         assert_eq!(chunk.bloque(8, 15, 8), Bloque::Aire);
+    }
+
+    #[test]
+    fn hay_arboles_y_la_superficie_sigue_cerrada() {
+        let mut maderas = 0;
+
+        for cz in -1..=1 {
+            for cx in -1..=1 {
+                let chunk = Chunk::generar(cx, cz);
+
+                for z in 0..LADO_I {
+                    for x in 0..LADO_I {
+                        let gx = cx * LADO_I + x;
+                        let gz = cz * LADO_I + z;
+                        let altura = generacion::altura(gx, gz);
+                        assert!(
+                            !chunk.bloque(x, altura - 1, z).es_aire(),
+                            "superficie abierta en ({gx}, {gz})"
+                        );
+                        for y in 0..LADO_I {
+                            if chunk.bloque(x, y, z) == Bloque::Madera {
+                                maderas += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(maderas > 0, "debería haber árboles en la zona");
     }
 
     #[test]

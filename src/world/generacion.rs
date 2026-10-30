@@ -12,6 +12,70 @@ pub fn altura(x: i32, z: i32) -> i32 {
     valor.round().clamp(3.0, 13.0) as i32
 }
 
+/// Indica si una celda subterránea debe quedar hueca (cueva).
+///
+/// Usa ruido 3D estirado en vertical, así que forma galerías alargadas
+/// en vez de burbujas redondas.
+pub fn cueva(x: i32, y: i32, z: i32) -> bool {
+    if y <= 1 {
+        return false;
+    }
+    let valor = ruido_suave_3d(x as f32, y as f32 * 1.7, z as f32, 15.0);
+    valor > 0.42
+}
+
+/// Indica si en esa columna nace un árbol. Determinista por coordenada.
+pub fn hay_arbol(x: i32, z: i32) -> bool {
+    let azar = (ruido_entero(x, z) + 1.0) * 0.5;
+    azar < 0.02
+}
+
+/// Altura del tronco del árbol de esa columna (4 o 5 bloques).
+pub fn altura_arbol(x: i32, z: i32) -> i32 {
+    let azar = (ruido_entero(x.wrapping_add(7), z.wrapping_sub(3)) + 1.0) * 0.5;
+    4 + (azar > 0.5) as i32
+}
+
+/// Ruido de valor 3D con interpolación suave.
+fn ruido_suave_3d(x: f32, y: f32, z: f32, escala: f32) -> f32 {
+    let fx = x / escala;
+    let fy = y / escala;
+    let fz = z / escala;
+
+    let x0 = fx.floor();
+    let y0 = fy.floor();
+    let z0 = fz.floor();
+    let tx = suavizar(fx - x0);
+    let ty = suavizar(fy - y0);
+    let tz = suavizar(fz - z0);
+
+    let (xi, yi, zi) = (x0 as i32, y0 as i32, z0 as i32);
+
+    let mut valor = 0.0;
+    for dz in 0..=1 {
+        for dy in 0..=1 {
+            for dx in 0..=1 {
+                let muestra = ruido_entero_3d(xi + dx, yi + dy, zi + dz);
+                let peso = (if dx == 1 { tx } else { 1.0 - tx })
+                    * (if dy == 1 { ty } else { 1.0 - ty })
+                    * (if dz == 1 { tz } else { 1.0 - tz });
+                valor += muestra * peso;
+            }
+        }
+    }
+    valor
+}
+
+fn ruido_entero_3d(x: i32, y: i32, z: i32) -> f32 {
+    let mut h = x
+        .wrapping_mul(374_761_393)
+        .wrapping_add(y.wrapping_mul(668_265_263))
+        .wrapping_add(z.wrapping_mul(2_147_483_647));
+    h = (h ^ (h >> 13)).wrapping_mul(1_274_126_177);
+    let unidad = ((h ^ (h >> 16)) & 0xffff) as f32 / 65_535.0;
+    unidad * 2.0 - 1.0
+}
+
 /// Ruido de valor con interpolación suave. Determinista: solo depende de
 /// las coordenadas.
 fn ruido_suave(x: f32, z: f32, escala: f32) -> f32 {
@@ -66,6 +130,40 @@ mod tests {
     #[test]
     fn la_altura_es_determinista() {
         assert_eq!(altura(12, -34), altura(12, -34));
+    }
+
+    #[test]
+    fn las_cuevas_aparecen_bajo_tierra_pero_no_en_el_fondo() {
+        let mut huecos = 0;
+        let mut total = 0;
+        for z in -20..20 {
+            for x in -20..20 {
+                for y in 2..10 {
+                    total += 1;
+                    if cueva(x, y, z) {
+                        huecos += 1;
+                    }
+                }
+            }
+        }
+        assert!(huecos > 0, "debería haber cuevas");
+        assert!(huecos < total / 2, "las cuevas no deberían comerse el mundo");
+        assert!(!cueva(0, 0, 0));
+        assert!(!cueva(0, 1, 0));
+    }
+
+    #[test]
+    fn los_arboles_son_deterministas() {
+        let mut encontrados = 0;
+        for z in 0..64 {
+            for x in 0..64 {
+                if hay_arbol(x, z) {
+                    encontrados += 1;
+                    assert!((4..=5).contains(&altura_arbol(x, z)));
+                }
+            }
+        }
+        assert!(encontrados > 0, "debería haber árboles");
     }
 
     #[test]

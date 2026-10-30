@@ -19,12 +19,14 @@ const ALCANCE: f32 = 6.0;
 /// de todo el mundo cargado, para que vuelva a caer desde arriba.
 const ALTURA_REAPARICION: f32 = 20.0;
 
-/// Bloques disponibles en la barra rápida, en orden (teclas 1 a 4).
-const BLOQUES_BARRA: [Bloque; 4] = [
+/// Bloques disponibles en la barra rápida, en orden (teclas 1 a 6).
+const BLOQUES_BARRA: [Bloque; 6] = [
     Bloque::Hierba,
     Bloque::Tierra,
     Bloque::Piedra,
     Bloque::Arena,
+    Bloque::Madera,
+    Bloque::Hojas,
 ];
 
 /// Cambios de chunks pendientes de aplicar en la GPU.
@@ -142,7 +144,7 @@ impl Juego {
         self.mundo.tomar_sucios()
     }
 
-    /// Elige un bloque de la barra por su índice (0 a 3).
+    /// Elige un bloque de la barra por su índice.
     pub fn seleccionar(&mut self, indice: usize) {
         self.seleccion = indice.min(BLOQUES_BARRA.len() - 1);
     }
@@ -167,8 +169,8 @@ impl Juego {
 
     /// Colores de los bloques de la barra, para que el render los dibuje
     /// sin conocer los tipos de bloque.
-    pub fn colores_barra(&self) -> [Vec3; 4] {
-        BLOQUES_BARRA.map(|bloque| bloque.color())
+    pub fn colores_barra(&self) -> Vec<Vec3> {
+        BLOQUES_BARRA.iter().map(|bloque| bloque.color()).collect()
     }
 
     /// Quita el bloque al que apunta la mira. Devuelve si hubo cambio.
@@ -278,12 +280,12 @@ mod tests {
         let mut juego = Juego::nuevo();
         juego.seleccionar(0);
         juego.ciclar_seleccion(false);
-        assert_eq!(juego.seleccion(), 3);
+        assert_eq!(juego.seleccion(), 5);
         juego.ciclar_seleccion(true);
         assert_eq!(juego.seleccion(), 0);
 
         juego.seleccionar(99);
-        assert_eq!(juego.seleccion(), 3);
+        assert_eq!(juego.seleccion(), 5);
     }
 
     #[test]

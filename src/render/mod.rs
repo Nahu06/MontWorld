@@ -84,7 +84,7 @@ impl Render {
     /// tipo de bloque.
     pub fn actualizar_barra(
         &mut self,
-        colores: &[Vec3; 4],
+        colores: &[Vec3],
         seleccion: usize,
     ) -> Result<(), Box<dyn Error>> {
         let datos = vertices_barra(colores, seleccion, self.contexto.aspecto());
@@ -165,7 +165,7 @@ fn vertices_mira() -> Vec<f32> {
 ///
 /// El ancho se divide por el aspecto para que las casillas se vean
 /// cuadradas en pantalla.
-fn vertices_barra(colores: &[Vec3; 4], seleccion: usize, aspecto: f32) -> Vec<f32> {
+fn vertices_barra(colores: &[Vec3], seleccion: usize, aspecto: f32) -> Vec<f32> {
     const ALTO: f32 = 0.11;
     const HUECO: f32 = 0.006;
     const BORDE: f32 = 0.005;
@@ -177,7 +177,8 @@ fn vertices_barra(colores: &[Vec3; 4], seleccion: usize, aspecto: f32) -> Vec<f3
     let borde = BORDE / aspecto;
     let marco = MARCO / aspecto;
 
-    let total = 4.0 * ancho + 3.0 * hueco;
+    let cantidad = colores.len() as f32;
+    let total = cantidad * ancho + (cantidad - 1.0) * hueco;
     let y0 = -0.95;
     let y1 = y0 + ALTO;
 
@@ -209,7 +210,7 @@ fn vertices_barra(colores: &[Vec3; 4], seleccion: usize, aspecto: f32) -> Vec<f3
 
     // Marco de la casilla seleccionada, dibujado al final para que quede
     // por encima del resto.
-    let seleccion = seleccion.min(3);
+    let seleccion = seleccion.min(colores.len().saturating_sub(1));
     let x = -total * 0.5 + seleccion as f32 * (ancho + hueco);
     let (mx0, mx1) = (x - marco - 0.002, x + ancho + marco + 0.002);
     let (my0, my1) = (y0 - marco - 0.002, y1 + marco + 0.002);
@@ -248,17 +249,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_barra_tiene_cuatro_casillas() {
-        let colores = [Vec3::new(1.0, 0.0, 0.0); 4];
+    fn la_barra_tiene_una_casilla_por_bloque() {
+        let colores = [Vec3::new(1.0, 0.0, 0.0); 6];
         let datos = vertices_barra(&colores, 0, 16.0 / 9.0);
-        // 4 casillas × 2 rectángulos (fondo + color) + 4 barras del marco.
-        let rectangulos = 4 * 2 + 4;
+        // 6 casillas × 2 rectángulos (fondo + color) + 4 barras del marco.
+        let rectangulos = 6 * 2 + 4;
         assert_eq!(datos.len(), rectangulos * 6 * 6);
     }
 
     #[test]
     fn la_seleccion_fuera_de_rango_no_se_sale_de_la_barra() {
-        let colores = [Vec3::new(0.5, 0.5, 0.5); 4];
+        let colores = [Vec3::new(0.5, 0.5, 0.5); 6];
         let datos = vertices_barra(&colores, 99, 16.0 / 9.0);
         assert!(!datos.is_empty());
         // Todos los vértices dentro de la pantalla.

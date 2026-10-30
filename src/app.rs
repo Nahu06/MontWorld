@@ -175,13 +175,15 @@ impl App {
     }
 }
 
-/// Teclas 1 a 4: índice de la barra rápida.
+/// Teclas 1 a 6: índice de la barra rápida.
 fn indice_de_barra(codigo: KeyCode) -> Option<usize> {
     match codigo {
         KeyCode::Digit1 => Some(0),
         KeyCode::Digit2 => Some(1),
         KeyCode::Digit3 => Some(2),
         KeyCode::Digit4 => Some(3),
+        KeyCode::Digit5 => Some(4),
+        KeyCode::Digit6 => Some(5),
         _ => None,
     }
 }

@@ -31,10 +31,10 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 3. ESTADO GENERAL
 ------------------------------------------------------------
 Fase: prototipo (Fase 1 en curso)
-Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con generación
-continua y carga dinámica, jugador con gravedad, colisiones, salto y
-sprint, romper/colocar con barra de 4 bloques, y guardado/carga de la
-partida con autoguardado. Va a 60 fps en el PC de referencia.
+Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con relieve, cuevas
+y árboles, generación continua y carga dinámica, jugador con gravedad,
+colisiones, salto y sprint, romper/colocar con barra de 6 bloques, y
+guardado/carga con autoguardado. Va a 60 fps en el PC de referencia.
 No funciona / falta: texturas, controles táctiles y build de Android.
 
 ------------------------------------------------------------
@@ -180,13 +180,17 @@ de asumir.
 ------------------------------------------------------------
 Ratón: mirar. WASD: caminar. Shift: correr. Espacio: saltar.
 Clic izquierdo: romper bloque. Clic derecho: colocar el bloque
-seleccionado. Teclas 1-4: elegir bloque de la barra. Rueda del
+seleccionado. Teclas 1-6: elegir bloque de la barra. Rueda del
 ratón: pasar al bloque siguiente/anterior.
 Esc: liberar el ratón (otra vez Esc cierra el juego).
 
-Barra rápida (v0.0.9): 4 casillas en la parte inferior, con el color
+Barra rápida (v0.0.11): 6 casillas en la parte inferior, con el color
 de cada bloque; la seleccionada lleva marco blanco. Orden:
-1 hierba, 2 tierra, 3 piedra (por defecto), 4 arena.
+1 hierba, 2 tierra, 3 piedra (por defecto), 4 arena, 5 madera,
+6 hojas.
+
+Bloques existentes: aire, tierra, piedra, hierba, arena, roca madre
+(fondo irrompible), madera y hojas.
 
 Física actual (v0.0.7):
 - Cuerpo en caja de 0.6 × 1.8 bloques; la cámara va a 1.62 de alto.
@@ -255,3 +259,5 @@ Probado por el usuario.
 v0.0.10: fondo de roca madre irrompible, muerte por caída con
 reaparición arriba y sellado de agujeros viejos. Probado por el
 usuario.
+v0.0.11: cuevas con ruido 3D, árboles, madera/hojas y barra de 6.
+Probado por el usuario.
