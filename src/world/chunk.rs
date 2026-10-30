@@ -52,7 +52,9 @@ impl Chunk {
                 let altura = generacion::altura(cx * LADO_I + x, cz * LADO_I + z);
 
                 for y in 0..altura {
-                    let bloque = if y == altura - 1 {
+                    let bloque = if y == 0 {
+                        Bloque::RocaMadre
+                    } else if y == altura - 1 {
                         // Las zonas bajas quedan como playa.
                         if altura <= 5 { Bloque::Arena } else { Bloque::Hierba }
                     } else if y >= altura - 3 {
@@ -100,6 +102,16 @@ mod tests {
             assert!(!chunk.bloque(0, altura - 1, z).es_aire());
             if altura < LADO_I {
                 assert!(chunk.bloque(0, altura, z).es_aire());
+            }
+        }
+    }
+
+    #[test]
+    fn el_fondo_del_mundo_es_roca_madre() {
+        let chunk = Chunk::generar(0, 0);
+        for z in 0..LADO_I {
+            for x in 0..LADO_I {
+                assert_eq!(chunk.bloque(x, 0, z), Bloque::RocaMadre);
             }
         }
     }

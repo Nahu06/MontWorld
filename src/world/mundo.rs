@@ -15,6 +15,9 @@ use super::chunk::{Chunk, LADO_I};
 use super::guardado::Cambios;
 use super::meshing;
 
+/// Altura del lecho rocoso: no se puede romper ni cambiar.
+pub const NIVEL_ROCA_MADRE: i32 = 0;
+
 pub struct Mundo {
     radio: i32,
     chunks: HashMap<(i32, i32), Chunk>,
@@ -66,9 +69,10 @@ impl Mundo {
         chunk.bloque(x.rem_euclid(LADO_I), y, z.rem_euclid(LADO_I))
     }
 
-    /// Cambia un bloque. Devuelve false si esa zona no está cargada.
+    /// Cambia un bloque. Devuelve false si esa zona no está cargada o si
+    /// es el lecho rocoso del fondo del mundo (irrompible).
     pub fn poner(&mut self, x: i32, y: i32, z: i32, bloque: Bloque) -> bool {
-        if y < 0 || y >= LADO_I {
+        if y <= NIVEL_ROCA_MADRE || y >= LADO_I {
             return false;
         }
         let Some(chunk) = self.chunks.get_mut(&Self::clave_de(x, z)) else {
@@ -153,6 +157,11 @@ impl Mundo {
 
                 // Reaplicar los bloques que el jugador ya había cambiado.
                 for ((x, y, z), bloque) in &self.cambios {
+                    // Partidas anteriores pudieron guardar agujeros en el
+                    // fondo: se ignoran para que el lecho quede intacto.
+                    if *y <= NIVEL_ROCA_MADRE {
+                        continue;
+                    }
                     if Self::clave_de(*x, *z) == clave {
                         chunk.poner(
                             x.rem_euclid(LADO_I),
@@ -236,6 +245,24 @@ mod tests {
             );
             assert!(vertice[2] >= 0.0 && vertice[2] <= 16.0);
         }
+    }
+
+    #[test]
+    fn el_lecho_rocoso_no_se_puede_romper() {
+        let mut mundo = Mundo::new(0);
+        mundo.ajustar((0, 0));
+        assert!(!mundo.poner(5, NIVEL_ROCA_MADRE, 5, Bloque::Aire));
+        assert_eq!(mundo.bloque(5, NIVEL_ROCA_MADRE, 5), Bloque::RocaMadre);
+    }
+
+    #[test]
+    fn los_cambios_viejos_en_el_fondo_no_abren_agujeros() {
+        let mut cambios = Cambios::new();
+        cambios.insert((3, NIVEL_ROCA_MADRE, 4), Bloque::Aire);
+
+        let mut mundo = Mundo::con_cambios(0, cambios);
+        mundo.ajustar((0, 0));
+        assert_eq!(mundo.bloque(3, NIVEL_ROCA_MADRE, 4), Bloque::RocaMadre);
     }
 
     #[test]

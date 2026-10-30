@@ -15,6 +15,10 @@ use crate::world::{Mundo, generacion, raycast};
 /// Alcance del rayo para romper y colocar bloques, en bloques.
 const ALCANCE: f32 = 6.0;
 
+/// Altura a la que reaparece el jugador al caer al vacío: por encima
+/// de todo el mundo cargado, para que vuelva a caer desde arriba.
+const ALTURA_REAPARICION: f32 = 20.0;
+
 /// Bloques disponibles en la barra rápida, en orden (teclas 1 a 4).
 const BLOQUES_BARRA: [Bloque; 4] = [
     Bloque::Hierba,
@@ -38,21 +42,21 @@ pub struct Juego {
     cambios: Cambios,
     /// Índice del bloque seleccionado en la barra rápida.
     seleccion: usize,
+    /// Punto de reaparición si el jugador cae al vacío.
+    aparicion: Vec3,
 }
 
 impl Juego {
     pub fn nuevo() -> Self {
+        // Aparecer justo encima del terreno, en el centro del mundo.
+        let aparicion = Vec3::new(8.5, generacion::altura(8, 8) as f32 + 0.2, 8.5);
         Self {
             mundo: Mundo::new(2),
-            // Aparecer justo encima del terreno, en el centro del mundo.
-            jugador: Jugador::nuevo(Vec3::new(
-                8.5,
-                generacion::altura(8, 8) as f32 + 0.2,
-                8.5,
-            )),
+            jugador: Jugador::nuevo(aparicion),
             centro: None,
             cambios: Cambios::default(),
             seleccion: 2, // piedra por defecto
+            aparicion,
         }
     }
 
@@ -62,6 +66,20 @@ impl Juego {
             let solido = |x, y, z| !self.mundo.bloque(x, y, z).es_aire();
             self.jugador.actualizar(entrada, paso, &solido);
         }
+
+        // Muerte por caída al vacío: reaparece arriba del todo, en la
+        // columna del punto inicial, y vuelve a caer sobre el terreno.
+        if self.jugador.posicion.y < -20.0 {
+            println!("Montworld: caíste al vacío; reapareciendo arriba");
+            let reaparicion = Vec3::new(
+                self.aparicion.x,
+                ALTURA_REAPARICION,
+                self.aparicion.z,
+            );
+            self.jugador
+                .colocar_en(reaparicion, self.jugador.camara.yaw, 0.0);
+        }
+
         self.actualizar_chunks();
     }
 
@@ -266,6 +284,21 @@ mod tests {
 
         juego.seleccionar(99);
         assert_eq!(juego.seleccion(), 3);
+    }
+
+    #[test]
+    fn caer_al_vacio_devuelve_al_inicio() {
+        let mut juego = juego_con_bloque();
+        let mut entrada = Input::new();
+
+        juego.jugador.posicion = Vec3::new(8.5, -100.0, 8.5);
+        juego.actualizar(&mut entrada, 1.0 / 60.0);
+
+        assert!(
+            (juego.jugador.posicion.y - ALTURA_REAPARICION).abs() < 0.01,
+            "debería reaparecer arriba: y = {}",
+            juego.jugador.posicion.y
+        );
     }
 
     #[test]

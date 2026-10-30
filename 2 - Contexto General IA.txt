@@ -35,8 +35,7 @@ Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con generación
 continua y carga dinámica, jugador con gravedad, colisiones, salto y
 sprint, romper/colocar con barra de 4 bloques, y guardado/carga de la
 partida con autoguardado. Va a 60 fps en el PC de referencia.
-No funciona / falta: texturas, lecho rocoso/reaparición, controles
-táctiles y build de Android.
+No funciona / falta: texturas, controles táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -196,6 +195,13 @@ Física actual (v0.0.7):
 - Ya no se vuela libremente: para explorar hay que caminar o saltar.
 - No se puede colocar un bloque dentro del cuerpo (se comprueba la
   caja completa). Si el jugador queda atrapado, se le libera subiendo.
+- El fondo del mundo (y = 0) es roca madre irrompible: no se puede
+  romper ni sobrescribir. Los agujeros guardados por versiones
+  anteriores se ignoran al cargar y el lecho queda intacto.
+- Muerte por caída: si el jugador pasa por debajo de y = -20,
+  reaparece en la columna del punto inicial a y = 20 (arriba del
+  todo) y vuelve a caer. Queda como red de seguridad para casos
+  extremos (partidas viejas, teletransportes).
 
 ------------------------------------------------------------
 11. GUARDADO
@@ -246,3 +252,6 @@ v0.0.8: guardado y carga de partida (sección 11). Probado por el
 usuario: conserva posición y bloques al reabrir.
 v0.0.9: barra de bloques y bloqueo de colocación dentro del cuerpo.
 Probado por el usuario.
+v0.0.10: fondo de roca madre irrompible, muerte por caída con
+reaparición arriba y sellado de agujeros viejos. Probado por el
+usuario.

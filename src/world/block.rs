@@ -13,6 +13,7 @@ pub enum Bloque {
     Piedra = 2,
     Hierba = 3,
     Arena = 4,
+    RocaMadre = 5,
 }
 
 impl Bloque {
@@ -23,6 +24,7 @@ impl Bloque {
             2 => Self::Piedra,
             3 => Self::Hierba,
             4 => Self::Arena,
+            5 => Self::RocaMadre,
             _ => Self::Aire,
         }
     }
@@ -39,6 +41,7 @@ impl Bloque {
             Self::Piedra => Vec3::new(0.55, 0.55, 0.58),
             Self::Hierba => Vec3::new(0.34, 0.62, 0.26),
             Self::Arena => Vec3::new(0.85, 0.79, 0.55),
+            Self::RocaMadre => Vec3::new(0.20, 0.20, 0.23),
         }
     }
 }
