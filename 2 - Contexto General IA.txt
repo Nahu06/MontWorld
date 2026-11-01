@@ -31,11 +31,13 @@ Vulkan. El detalle paso a paso va en "3 - Roadmap.txt".
 3. ESTADO GENERAL
 ------------------------------------------------------------
 Fase: prototipo (Fase 1 en curso)
-Funciona hoy: mundo de 5×5 chunks (80×80 bloques) con relieve, cuevas
-y árboles, generación continua y carga dinámica, jugador con gravedad,
-colisiones, salto y sprint, romper/colocar con barra de 6 bloques, y
-guardado/carga con autoguardado. Va a 60 fps en el PC de referencia.
-No funciona / falta: texturas, controles táctiles y build de Android.
+Funciona hoy: mundo infinito en todas las direcciones (chunks 3D
+cargados en 5×5×5 alrededor del jugador) con relieve de -20 a 48,
+cuevas, árboles, jugador con gravedad, colisiones, salto y sprint,
+romper/colocar con barra de 6 bloques, ciclo día/noche con sol, luna y
+estrellas, zonas geográficas y guardado/carga con autoguardado.
+No funciona / falta: texturas, minerales por profundidad, controles
+táctiles y build de Android.
 
 ------------------------------------------------------------
 4. TECNOLOGÍAS Y HERRAMIENTAS
@@ -109,7 +111,8 @@ Montworld/
     world/
       mod.rs            Punto de entrada del mundo
       block.rs          Tipos de bloque y colores
-      chunk.rs          Chunk 16×16×16 y almacenamiento de bloques
+      chunk.rs          Chunk 16×16×16 (clave 3D) y generación
+      geografia.rs      Zonas por altitud (cielo, montaña, subsuelo...)
       generacion.rs     Ruido y altura del terreno
       mundo.rs          Rejilla de chunks, carga/descarga, mallas y
                         seguimiento de chunks sucios
@@ -136,6 +139,20 @@ usar las de abajo):
   world NO conoce OpenGL, winit ni la ventana.
   juego NO conoce OpenGL ni winit: es simulación pura.
   base NO depende del proyecto.
+
+Hilos (regla 7):
+- Hilo principal: winit, OpenGL, mundo autoritativo, jugador y reglas.
+- Hilos de trabajo: generación de chunks y meshing. No tocan OpenGL.
+- Comunicación por canales mpsc: trabajos inmutables de ida y mallas
+  terminadas de vuelta.
+- El hilo principal nunca se bloquea esperando a un trabajador; si un
+  resultado no está listo, ese chunk simplemente aún no se dibuja.
+- Los trabajadores reciben copias del chunk y de sus vecinos (o una
+  instantánea de los cambios); no comparten el `Mundo` sin sincronizar.
+
+Estado del multihilo: PENDIENTE de implementar (v0.0.14). Mientras
+tanto, `Mundo::ajustar` reparte la generación con un presupuesto por
+frame como medida provisional.
 
 Reglas de diseño:
 - Cada archivo tiene una responsabilidad y un nombre claro.
@@ -182,6 +199,7 @@ Ratón: mirar. WASD: caminar. Shift: correr. Espacio: saltar.
 Clic izquierdo: romper bloque. Clic derecho: colocar el bloque
 seleccionado. Teclas 1-6: elegir bloque de la barra. Rueda del
 ratón: pasar al bloque siguiente/anterior.
+T: adelantar una hora del mundo (atajo para probar el ciclo).
 Esc: liberar el ratón (otra vez Esc cierra el juego).
 
 Barra rápida (v0.0.11): 6 casillas en la parte inferior, con el color
@@ -192,6 +210,28 @@ de cada bloque; la seleccionada lleva marco blanco. Orden:
 Bloques existentes: aire, tierra, piedra, hierba, arena, roca madre
 (fondo irrompible), madera y hojas.
 
+Mundo vertical (v0.0.13):
+- Chunks de 16×16×16 identificados por (cx, cy, cz).
+- Se cargan 5×5×5 = 125 chunks alrededor del jugador (radio 2 en cada
+  eje) y se descargan los que quedan fuera. Al avanzar se generan
+  chunks nuevos, así que el mundo es infinito en todas direcciones.
+- La altura del terreno va de -20 a 48 bloques, con valles, montañas
+  y cuevas en cualquier profundidad.
+- Los cambios de bloques se guardan por coordenada absoluta, también
+  fuera de la zona cargada.
+
+Ciclo día/noche (v0.0.12):
+- Un día completo dura 600 s reales. La hora va de 0 a 1:
+  0 amanecer, 0.25 mediodía, 0.5 atardecer, 0.75 medianoche.
+- El cielo cambia de color (noche, día y tono naranja al amanecer y
+  al atardecer) y la luz global multiplica el color de los bloques
+  (mínimo 0.30 para que la noche sea jugable).
+- El sol es un cuadrado, la luna un círculo y las estrellas puntos
+  blancos; solo se dibujan de noche.
+- El cielo se dibuja con una vista SIN traslación: girar la cámara lo
+  mueve, caminar no. Los astros se colocan a 120 unidades.
+- La hora se guarda en la partida.
+
 Física actual (v0.0.7):
 - Cuerpo en caja de 0.6 × 1.8 bloques; la cámara va a 1.62 de alto.
 - Gravedad 28 bloques/s², salto de 8.5, caída máxima 40.
@@ -199,13 +239,10 @@ Física actual (v0.0.7):
 - Ya no se vuela libremente: para explorar hay que caminar o saltar.
 - No se puede colocar un bloque dentro del cuerpo (se comprueba la
   caja completa). Si el jugador queda atrapado, se le libera subiendo.
-- El fondo del mundo (y = 0) es roca madre irrompible: no se puede
-  romper ni sobrescribir. Los agujeros guardados por versiones
-  anteriores se ignoran al cargar y el lecho queda intacto.
-- Muerte por caída: si el jugador pasa por debajo de y = -20,
-  reaparece en la columna del punto inicial a y = 20 (arriba del
-  todo) y vuelve a caer. Queda como red de seguridad para casos
-  extremos (partidas viejas, teletransportes).
+- No hay fondo ni techo: se puede cavar y construir sin límite.
+- Muerte por caída: si el jugador pasa por debajo de y = -200,
+  reaparece en la columna del punto inicial a y = 20 y vuelve a caer.
+  Queda como red de seguridad para casos extremos.
 
 ------------------------------------------------------------
 11. GUARDADO
@@ -216,8 +253,11 @@ Archivo: ~/.local/share/montworld/partida.mnt
 - Solo se guardan los bloques modificados respecto al terreno
   generado, más la posición y los ángulos de la cámara.
 - Formato binario propio, little-endian: firma "MONT", versión,
-  posición (3 × f32), yaw, pitch, cantidad de cambios y, por cada
-  cambio, x/y/z (i32) + bloque (u8).
+  posición (3 × f32), yaw, pitch, hora del mundo (f32, desde la
+  versión 2), cantidad de cambios y, por cada cambio, x/y/z (i32) +
+  bloque (u8).
+- Las partidas de la versión 1 se siguen leyendo: usan la hora
+  inicial 0.15.
 - Se guarda al salir y automáticamente cada 20 segundos.
 - La escritura es atómica: primero a `partida.mnt.tmp` y luego
   renombrado.
@@ -225,7 +265,27 @@ Archivo: ~/.local/share/montworld/partida.mnt
   incluso fuera de la zona cargada en ese momento.
 
 ------------------------------------------------------------
-12. REGISTRO DE ACTUALIZACIÓN
+12. GEOGRAFÍA
+------------------------------------------------------------
+Las capas se definen por la altura absoluta (y) en
+`world/geografia.rs`:
+
+  y >= 64          cielo
+  32 <= y < 64     montaña
+  0 <= y < 32      superficie
+  -32 < y < 0      subsuelo
+  -128 <= y <= -32 profundo
+  y < -128         abismo
+
+- `geografia::zona(y)` devuelve la zona y `geografia::nombre()` su
+  nombre; la zona actual aparece en el título de la ventana.
+- `geografia::profundidad(y)` da los bloques bajo el nivel 0 (aún sin
+  usar): servirá para repartir minerales y objetos por profundidad.
+- Regla: cualquier contenido nuevo que dependa de la altura debe
+  consultar este módulo, no comparar números sueltos por el código.
+
+------------------------------------------------------------
+13. REGISTRO DE ACTUALIZACIÓN
 ------------------------------------------------------------
 Última actualización: 2026-10-30
 Actualizado por: IA

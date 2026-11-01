@@ -5,10 +5,12 @@ layout(location = 0) in vec3 a_posicion;
 layout(location = 1) in vec3 a_color;
 
 uniform mat4 u_vista_proy;
+// Luz global del ciclo día/noche (0 = noche cerrada, 1 = mediodía).
+uniform float u_luz;
 
 out vec3 v_color;
 
 void main() {
-    v_color = a_color;
+    v_color = a_color * u_luz;
     gl_Position = u_vista_proy * vec4(a_posicion, 1.0);
 }

@@ -3,13 +3,18 @@
 //! Todo depende de coordenadas globales, de modo que dos chunks vecinos
 //! encajan sin costuras ni saltos de altura.
 
-/// Altura de la superficie en coordenadas globales. Va de 3 a 13 para que
-/// quepa de sobra en los 16 bloques de alto de un chunk.
+/// Altura de la superficie en coordenadas globales.
+///
+/// Puede ser negativa (valles y simas) y superar los 40 bloques (montañas).
+/// No hay tope de mundo: solo se limita el relieve para que sea razonable.
 pub fn altura(x: i32, z: i32) -> i32 {
     let x = x as f32;
     let z = z as f32;
-    let valor = 8.0 + ruido_suave(x, z, 26.0) * 3.0 + ruido_suave(x, z, 9.0) * 1.2;
-    valor.round().clamp(3.0, 13.0) as i32
+    let valor = 6.0
+        + ruido_suave(x, z, 60.0) * 16.0
+        + ruido_suave(x, z, 24.0) * 6.0
+        + ruido_suave(x, z, 8.0) * 2.0;
+    valor.round().clamp(-20.0, 48.0) as i32
 }
 
 /// Indica si una celda subterránea debe quedar hueca (cueva).
@@ -17,9 +22,6 @@ pub fn altura(x: i32, z: i32) -> i32 {
 /// Usa ruido 3D estirado en vertical, así que forma galerías alargadas
 /// en vez de burbujas redondas.
 pub fn cueva(x: i32, y: i32, z: i32) -> bool {
-    if y <= 1 {
-        return false;
-    }
     let valor = ruido_suave_3d(x as f32, y as f32 * 1.7, z as f32, 15.0);
     valor > 0.42
 }
@@ -122,9 +124,24 @@ mod tests {
         for z in -80..80 {
             for x in -80..80 {
                 let h = altura(x, z);
-                assert!((3..=13).contains(&h), "altura {h} en ({x}, {z})");
+                assert!((-20..=48).contains(&h), "altura {h} en ({x}, {z})");
             }
         }
+    }
+
+    #[test]
+    fn hay_alturas_positivas_y_negativas() {
+        let mut minimo = i32::MAX;
+        let mut maximo = i32::MIN;
+        for z in -200..200 {
+            for x in -200..200 {
+                let h = altura(x, z);
+                minimo = minimo.min(h);
+                maximo = maximo.max(h);
+            }
+        }
+        assert!(minimo < 0, "debería haber valles bajo cero");
+        assert!(maximo > 20, "debería haber montañas altas");
     }
 
     #[test]
@@ -148,8 +165,13 @@ mod tests {
         }
         assert!(huecos > 0, "debería haber cuevas");
         assert!(huecos < total / 2, "las cuevas no deberían comerse el mundo");
-        assert!(!cueva(0, 0, 0));
-        assert!(!cueva(0, 1, 0));
+
+        // También hay cuevas en profundidad (mundo infinito hacia abajo).
+        let profundas = (-120..-80)
+            .flat_map(|y| (0..20).map(move |x| (x, y)))
+            .filter(|(x, y)| cueva(*x, *y, 0))
+            .count();
+        assert!(profundas > 0, "debería haber cuevas profundas");
     }
 
     #[test]
@@ -172,7 +194,7 @@ mod tests {
         for z in -40..40 {
             for x in -40..40 {
                 let diferencia = (altura(x, z) - altura(x + 1, z)).abs();
-                assert!(diferencia <= 2, "salto de {diferencia} en ({x}, {z})");
+                assert!(diferencia <= 3, "salto de {diferencia} en ({x}, {z})");
             }
         }
     }

@@ -9,11 +9,19 @@ use crate::base::math::Vec3;
 use crate::entrada::Input;
 use crate::jugador::Jugador;
 use crate::world::block::Bloque;
-use crate::world::guardado::Partida;
-use crate::world::{Mundo, generacion, raycast};
+use crate::world::chunk::Clave;
+use crate::world::guardado::{HORA_INICIAL, Partida};
+use crate::world::{Mundo, generacion, geografia, raycast};
 
 /// Alcance del rayo para romper y colocar bloques, en bloques.
 const ALCANCE: f32 = 6.0;
+
+/// Duración de un día completo de juego, en segundos reales.
+const DURACION_DIA: f32 = 600.0;
+
+/// Chunks que se generan como máximo por paso de simulación. Reparte el
+/// trabajo para no provocar tirones al cruzar un borde.
+const PRESUPUESTO_CHUNKS: usize = 4;
 
 /// Altura a la que reaparece el jugador al caer al vacío: por encima
 /// de todo el mundo cargado, para que vuelva a caer desde arriba.
@@ -32,20 +40,20 @@ const BLOQUES_BARRA: [Bloque; 6] = [
 /// Cambios de chunks pendientes de aplicar en la GPU.
 #[derive(Default)]
 pub struct Cambios {
-    pub nuevos: Vec<(i32, i32)>,
-    pub quitados: Vec<(i32, i32)>,
+    pub nuevos: Vec<Clave>,
+    pub quitados: Vec<Clave>,
 }
 
 pub struct Juego {
     pub mundo: Mundo,
     pub jugador: Jugador,
-    /// Chunk en el que está la cámara, para saber cuándo recargar.
-    centro: Option<(i32, i32)>,
     cambios: Cambios,
     /// Índice del bloque seleccionado en la barra rápida.
     seleccion: usize,
     /// Punto de reaparición si el jugador cae al vacío.
     aparicion: Vec3,
+    /// Hora del mundo en [0, 1): 0 amanecer, 0.5 atardecer.
+    hora: f32,
 }
 
 impl Juego {
@@ -53,12 +61,12 @@ impl Juego {
         // Aparecer justo encima del terreno, en el centro del mundo.
         let aparicion = Vec3::new(8.5, generacion::altura(8, 8) as f32 + 0.2, 8.5);
         Self {
-            mundo: Mundo::new(2),
+            mundo: Mundo::new(2, 2),
             jugador: Jugador::nuevo(aparicion),
-            centro: None,
             cambios: Cambios::default(),
             seleccion: 2, // piedra por defecto
             aparicion,
+            hora: HORA_INICIAL,
         }
     }
 
@@ -69,9 +77,12 @@ impl Juego {
             self.jugador.actualizar(entrada, paso, &solido);
         }
 
+        // El día avanza con el tiempo simulado.
+        self.hora = (self.hora + paso / DURACION_DIA).rem_euclid(1.0);
+
         // Muerte por caída al vacío: reaparece arriba del todo, en la
         // columna del punto inicial, y vuelve a caer sobre el terreno.
-        if self.jugador.posicion.y < -20.0 {
+        if self.jugador.posicion.y < -256.0 {
             println!("Montworld: caíste al vacío; reapareciendo arriba");
             let reaparicion = Vec3::new(
                 self.aparicion.x,
@@ -85,26 +96,39 @@ impl Juego {
         self.actualizar_chunks();
     }
 
-    /// Carga y descarga chunks alrededor del jugador. Solo hace trabajo
-    /// cuando cambia de chunk.
+    /// Carga y descarga chunks alrededor del jugador, con presupuesto
+    /// limitado por paso para repartir la generación entre frames.
     fn actualizar_chunks(&mut self) {
         let p = self.jugador.camara.posicion;
-        let centro = Mundo::clave_de(p.x.floor() as i32, p.z.floor() as i32);
-        if self.centro == Some(centro) {
-            return;
-        }
-        self.centro = Some(centro);
+        let centro = Mundo::clave_de(
+            p.x.floor() as i32,
+            p.y.floor() as i32,
+            p.z.floor() as i32,
+        );
 
-        let (nuevos, quitados) = self.mundo.ajustar(centro);
+        let (nuevos, quitados) = self.mundo.ajustar(centro, PRESUPUESTO_CHUNKS);
         self.cambios.nuevos.extend(nuevos);
         self.cambios.quitados.extend(quitados);
     }
 
-    /// Fuerza una recarga completa en el próximo paso (por ejemplo, al
-    /// volver a crear el contexto gráfico).
-    pub fn reiniciar_streaming(&mut self) {
-        self.centro = None;
-        self.actualizar_chunks();
+    /// Zona geográfica en la que está el jugador.
+    pub fn zona(&self) -> geografia::Zona {
+        geografia::zona(self.jugador.posicion.y.floor() as i32)
+    }
+
+    /// Hora del mundo en [0, 1).
+    pub fn hora(&self) -> f32 {
+        self.hora
+    }
+
+    pub fn poner_hora(&mut self, hora: f32) {
+        self.hora = hora.rem_euclid(1.0);
+    }
+
+    /// Adelanta (o atrasa) la hora del mundo. Se usa con la tecla T para
+    /// probar el ciclo sin esperar.
+    pub fn avanzar_hora(&mut self, fraccion: f32) {
+        self.poner_hora(self.hora + fraccion);
     }
 
     /// Estado actual para guardar la partida.
@@ -114,6 +138,7 @@ impl Juego {
             posicion: [p.x, p.y, p.z],
             yaw: self.jugador.camara.yaw,
             pitch: self.jugador.camara.pitch,
+            hora: self.hora,
             cambios: self.mundo.cambios().clone(),
         }
     }
@@ -131,7 +156,7 @@ impl Juego {
             partida.pitch,
         );
         self.mundo.reemplazar_cambios(partida.cambios);
-        self.centro = None;
+        self.hora = partida.hora.rem_euclid(1.0);
     }
 
     /// Retira los cambios de chunks pendientes de aplicar.
@@ -140,7 +165,7 @@ impl Juego {
     }
 
     /// Chunks que hay que reconstruir tras un cambio de bloques.
-    pub fn tomar_sucios(&mut self) -> Vec<(i32, i32)> {
+    pub fn tomar_sucios(&mut self) -> Vec<Clave> {
         self.mundo.tomar_sucios()
     }
 
@@ -220,9 +245,14 @@ impl Juego {
 mod tests {
     use super::*;
 
+    /// Crea el juego y deja cargados todos los chunks iniciales.
     fn juego_con_bloque() -> Juego {
         let mut juego = Juego::nuevo();
-        juego.reiniciar_streaming();
+        let mut entrada = Input::new();
+        // 4 chunks por paso; con 40 pasos se cargan los 125 de sobra.
+        for _ in 0..40 {
+            juego.actualizar(&mut entrada, 1.0 / 60.0);
+        }
         juego
     }
 
@@ -239,9 +269,9 @@ mod tests {
     fn al_arrancar_se_cargan_los_chunks_alrededor() {
         let mut juego = juego_con_bloque();
         let cambios = juego.tomar_cambios();
-        assert_eq!(cambios.nuevos.len(), 25);
+        assert_eq!(cambios.nuevos.len(), 125);
         assert!(cambios.quitados.is_empty());
-        assert_eq!(juego.mundo.cantidad(), 25);
+        assert_eq!(juego.mundo.cantidad(), 125);
     }
 
     #[test]
@@ -289,11 +319,25 @@ mod tests {
     }
 
     #[test]
+    fn la_hora_avanza_y_da_la_vuelta() {
+        let mut juego = juego_con_bloque();
+        let mut entrada = Input::new();
+
+        let inicio = juego.hora();
+        juego.actualizar(&mut entrada, 1.0 / 60.0);
+        assert!(juego.hora() > inicio);
+
+        juego.poner_hora(0.999);
+        juego.actualizar(&mut entrada, 1.0);
+        assert!(juego.hora() < 0.5, "la hora debe dar la vuelta");
+    }
+
+    #[test]
     fn caer_al_vacio_devuelve_al_inicio() {
         let mut juego = juego_con_bloque();
         let mut entrada = Input::new();
 
-        juego.jugador.posicion = Vec3::new(8.5, -100.0, 8.5);
+        juego.jugador.posicion = Vec3::new(8.5, -300.0, 8.5);
         juego.actualizar(&mut entrada, 1.0 / 60.0);
 
         assert!(

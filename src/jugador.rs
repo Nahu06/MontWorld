@@ -91,12 +91,26 @@ impl Camara {
     }
 
     pub fn vista(&self) -> Mat4 {
-        // La base sale de yaw y pitch; "arriba" es un producto vectorial,
-        // así que nunca degenera ni mirando casi al cenit.
-        let adelante = self.adelante();
-        let derecha = self.derecha();
-        let arriba = derecha.cross(adelante);
-        Mat4::desde_base(self.posicion, derecha, arriba, adelante)
+        Mat4::desde_base(
+            self.posicion,
+            self.derecha(),
+            self.derecha().cross(self.adelante()),
+            self.adelante(),
+        )
+    }
+
+    /// Vista con la misma orientación pero sin traslación.
+    ///
+    /// Se usa para el cielo: al ignorar la posición del jugador, los
+    /// astros se comportan como si estuvieran en el infinito y caminar no
+    /// los mueve.
+    pub fn vista_rotacion(&self) -> Mat4 {
+        Mat4::desde_base(
+            Vec3::ZERO,
+            self.derecha(),
+            self.derecha().cross(self.adelante()),
+            self.adelante(),
+        )
     }
 
     pub fn proyeccion(&self, aspecto: f32) -> Mat4 {
@@ -145,6 +159,15 @@ impl Jugador {
         self.camara.posicion = self.posicion + Vec3::new(0.0, ALTURA_OJOS, 0.0);
     }
 
+    /// Solo aplica el giro del ratón (sin física). Se usa mientras el
+    /// mundo todavía no tiene cargado el chunk del jugador.
+    pub fn mirar(&mut self, entrada: &mut Input) {
+        let (dx, dy) = entrada.tomar_raton();
+        if dx != 0.0 || dy != 0.0 {
+            self.camara.girar(dx, dy);
+        }
+    }
+
     /// Un paso de control y física. `solido` dice si una celda es sólida.
     pub fn actualizar(
         &mut self,
@@ -152,10 +175,7 @@ impl Jugador {
         paso: f32,
         solido: &dyn Fn(i32, i32, i32) -> bool,
     ) {
-        let (dx, dy) = entrada.tomar_raton();
-        if dx != 0.0 || dy != 0.0 {
-            self.camara.girar(dx, dy);
-        }
+        self.mirar(entrada);
 
         // Velocidad horizontal: se fija directamente para que el control
         // responda al instante.
@@ -342,6 +362,24 @@ mod tests {
                 (distancia - referencia).abs() < 1e-3,
                 "yaw {yaw}, pitch {pitch}: {distancia} != {referencia}"
             );
+        }
+    }
+
+    #[test]
+    fn el_cielo_no_se_mueve_al_caminar() {
+        let mut cerca = Camara::new(Vec3::new(0.0, 5.0, 0.0));
+        let mut lejos = Camara::new(Vec3::new(300.0, -20.0, 120.0));
+        cerca.yaw = 0.9;
+        cerca.pitch = 0.2;
+        lejos.yaw = 0.9;
+        lejos.pitch = 0.2;
+
+        let punto = Vec3::new(0.0, 100.0, -60.0);
+        let a = transformar(&cerca.vista_rotacion(), punto);
+        let b = transformar(&lejos.vista_rotacion(), punto);
+
+        for i in 0..3 {
+            assert!((a[i] - b[i]).abs() < 1e-4, "el cielo se movió: {a:?} vs {b:?}");
         }
     }
 

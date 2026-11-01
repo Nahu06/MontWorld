@@ -25,10 +25,16 @@ pub struct Frame {
     pub fps: f32,
 }
 
+/// Ventana de medida de FPS: se cuentan frames reales durante este
+/// tiempo. Así el contador refleja los tirones, no una media engañosa.
+const VENTANA_FPS: Duration = Duration::from_millis(500);
+
 pub struct Clock {
     last: Instant,
     accumulator: Duration,
     fps: f32,
+    frames_ventana: u32,
+    tiempo_ventana: Duration,
 }
 
 impl Clock {
@@ -37,6 +43,8 @@ impl Clock {
             last: Instant::now(),
             accumulator: Duration::ZERO,
             fps: 0.0,
+            frames_ventana: 0,
+            tiempo_ventana: Duration::ZERO,
         }
     }
 
@@ -46,6 +54,8 @@ impl Clock {
         self.last = Instant::now();
         self.accumulator = Duration::ZERO;
         self.fps = 0.0;
+        self.frames_ventana = 0;
+        self.tiempo_ventana = Duration::ZERO;
     }
 
     pub fn begin_frame(&mut self) -> Frame {
@@ -55,14 +65,13 @@ impl Clock {
 
         let delta_f32 = delta.as_secs_f32();
 
-        // Media movil suave para que el contador de FPS no parpadee.
-        if delta_f32 > 0.0 {
-            let instant = 1.0 / delta_f32;
-            self.fps = if self.fps == 0.0 {
-                instant
-            } else {
-                self.fps + (instant - self.fps) * 0.1
-            };
+        // FPS reales: frames contados divididos por el tiempo medido.
+        self.frames_ventana += 1;
+        self.tiempo_ventana += delta;
+        if self.tiempo_ventana >= VENTANA_FPS {
+            self.fps = self.frames_ventana as f32 / self.tiempo_ventana.as_secs_f32();
+            self.frames_ventana = 0;
+            self.tiempo_ventana = Duration::ZERO;
         }
 
         self.accumulator += delta;

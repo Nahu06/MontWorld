@@ -3,6 +3,7 @@
 //! Este módulo no conoce las reglas del juego: recibe una cámara y las
 //! mallas de cada chunk ya construidas desde la capa superior.
 
+mod cielo;
 mod contexto;
 mod malla;
 mod shader;
@@ -16,22 +17,24 @@ use winit::window::Window;
 
 use crate::base::math::{Mat4, Vec3};
 use crate::jugador::Camara;
+use crate::world::chunk::Clave;
 
+use cielo::Cielo;
 use contexto::Contexto;
 use malla::Malla;
 
 const VERTICE: &str = include_str!("shaders/bloque.vert");
 const FRAGMENTO: &str = include_str!("shaders/bloque.frag");
 
-const COLOR_CIELO: [f32; 4] = [0.53, 0.72, 0.92, 1.0];
-
 pub struct Render {
     contexto: Contexto,
     programa: glow::Program,
     u_vista_proy: Option<glow::UniformLocation>,
-    mallas: HashMap<(i32, i32), Malla>,
+    u_luz: Option<glow::UniformLocation>,
+    mallas: HashMap<Clave, Malla>,
     mira: Malla,
     barra: Malla,
+    cielo: Cielo,
 }
 
 impl Render {
@@ -40,14 +43,17 @@ impl Render {
         let programa = shader::programa(&contexto.gl, VERTICE, FRAGMENTO)?;
         let mira = Malla::subir(&contexto.gl, &vertices_mira())?;
         let barra = Malla::subir(&contexto.gl, &[])?;
+        let cielo = Cielo::nuevo(&contexto.gl, 0.0)?;
 
         Ok(Self {
             contexto,
             programa,
             u_vista_proy: None,
+            u_luz: None,
             mallas: HashMap::new(),
             mira,
             barra,
+            cielo,
         })
     }
 
@@ -62,7 +68,7 @@ impl Render {
     /// Sube (o reemplaza) la malla de un chunk.
     pub fn subir_chunk(
         &mut self,
-        clave: (i32, i32),
+        clave: Clave,
         datos: &[f32],
     ) -> Result<(), Box<dyn Error>> {
         let nueva = Malla::subir(&self.contexto.gl, datos)?;
@@ -73,7 +79,7 @@ impl Render {
     }
 
     /// Elimina de la GPU la malla de un chunk descargado.
-    pub fn quitar_chunk(&mut self, clave: (i32, i32)) {
+    pub fn quitar_chunk(&mut self, clave: Clave) {
         if let Some(malla) = self.mallas.remove(&clave) {
             malla.borrar(&self.contexto.gl);
         }
@@ -94,23 +100,49 @@ impl Render {
         Ok(())
     }
 
-    pub fn dibujar(&mut self, camara: &Camara) {
+    pub fn dibujar(&mut self, camara: &Camara, hora: f32) {
         let gl = &self.contexto.gl;
         let (ancho, alto) = self.contexto.tamano();
-        let vista_proy = camara.vista_proyeccion(self.contexto.aspecto());
+        let aspecto = self.contexto.aspecto();
+        let vista_proy = camara.vista_proyeccion(aspecto);
+        // Cielo: misma rotación, sin traslación.
+        let vista_cielo = camara.proyeccion(aspecto).mul(camara.vista_rotacion());
+        let (color_cielo, luz) = ambiente(hora);
 
         unsafe {
             gl.viewport(0, 0, ancho as i32, alto as i32);
-            gl.clear_color(COLOR_CIELO[0], COLOR_CIELO[1], COLOR_CIELO[2], COLOR_CIELO[3]);
+            gl.clear_color(color_cielo[0], color_cielo[1], color_cielo[2], 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
 
             gl.use_program(Some(self.programa));
             if self.u_vista_proy.is_none() {
                 self.u_vista_proy = gl.get_uniform_location(self.programa, "u_vista_proy");
             }
+            if self.u_luz.is_none() {
+                self.u_luz = gl.get_uniform_location(self.programa, "u_luz");
+            }
 
+            // 1. Cielo, sin profundidad y a brillo completo.
+            if let Err(err) = self.cielo.actualizar(gl, hora, aspecto) {
+                eprintln!("Montworld: no se pudo actualizar el cielo: {err}");
+            }
+            gl.disable(glow::DEPTH_TEST);
+            gl.depth_mask(false);
+            if let Some(ubicacion) = self.u_luz.as_ref() {
+                gl.uniform_1_f32(Some(ubicacion), 1.0);
+            }
+            if let Some(ubicacion) = self.u_vista_proy.as_ref() {
+                gl.uniform_matrix_4_f32_slice(Some(ubicacion), false, &vista_cielo.m);
+            }
+            self.cielo.dibujar(gl);
+            gl.depth_mask(true);
+
+            // 2. Mundo, con la luz de la hora actual.
             if !self.mallas.is_empty() {
                 gl.enable(glow::DEPTH_TEST);
+                if let Some(ubicacion) = self.u_luz.as_ref() {
+                    gl.uniform_1_f32(Some(ubicacion), luz);
+                }
                 if let Some(ubicacion) = self.u_vista_proy.as_ref() {
                     gl.uniform_matrix_4_f32_slice(Some(ubicacion), false, &vista_proy.m);
                 }
@@ -121,8 +153,10 @@ impl Render {
                 gl.disable(glow::DEPTH_TEST);
             }
 
-            // HUD en coordenadas de pantalla (NDC), siempre encima.
-            gl.disable(glow::DEPTH_TEST);
+            // 3. HUD en coordenadas de pantalla (NDC), siempre encima.
+            if let Some(ubicacion) = self.u_luz.as_ref() {
+                gl.uniform_1_f32(Some(ubicacion), 1.0);
+            }
             if let Some(ubicacion) = self.u_vista_proy.as_ref() {
                 gl.uniform_matrix_4_f32_slice(Some(ubicacion), false, &Mat4::identidad().m);
             }
@@ -142,10 +176,40 @@ impl Drop for Render {
         }
         self.mira.borrar(&self.contexto.gl);
         self.barra.borrar(&self.contexto.gl);
+        self.cielo.borrar(&self.contexto.gl);
         unsafe {
             self.contexto.gl.delete_program(self.programa);
         }
     }
+}
+
+/// Color del cielo y factor de luz global para una hora del mundo.
+///
+/// `hora` va de 0 a 1: 0 amanecer, 0.25 mediodía, 0.5 atardecer,
+/// 0.75 medianoche. La luz nunca baja de 0.3 para que la noche siga
+/// siendo jugable.
+pub fn ambiente(hora: f32) -> ([f32; 3], f32) {
+    let sol = (hora * std::f32::consts::TAU).sin();
+    let dia = (sol * 1.7).clamp(0.0, 1.0);
+    let crepusculo = (1.0 - sol.abs() * 2.5).clamp(0.0, 1.0);
+
+    const NOCHE: [f32; 3] = [0.03, 0.05, 0.10];
+    const DIA: [f32; 3] = [0.53, 0.72, 0.92];
+    const NARANJA: [f32; 3] = [0.95, 0.55, 0.30];
+
+    let base = mezclar(NOCHE, DIA, dia);
+    let cielo = mezclar(base, NARANJA, crepusculo * 0.55);
+    let luz = 0.30 + 0.70 * dia;
+
+    (cielo, luz)
+}
+
+fn mezclar(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+    ]
 }
 
 /// Mira en coordenadas de pantalla (NDC): dos barras cruzadas.
@@ -247,6 +311,25 @@ fn empujar_rectangulo(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn el_mediodia_es_claro_y_la_medianoche_oscura() {
+        let (cielo_dia, luz_dia) = ambiente(0.25);
+        let (cielo_noche, luz_noche) = ambiente(0.75);
+
+        assert!(luz_dia > 0.95, "luz de día = {luz_dia}");
+        assert!((luz_noche - 0.30).abs() < 1e-4, "luz de noche = {luz_noche}");
+        assert!(cielo_dia[2] > 0.8, "cielo de día = {cielo_dia:?}");
+        assert!(cielo_noche[2] < 0.2, "cielo de noche = {cielo_noche:?}");
+
+        for hora in [0.0, 0.1, 0.25, 0.5, 0.75, 0.9] {
+            let (cielo, luz) = ambiente(hora);
+            assert!((0.0..=1.0).contains(&luz));
+            for canal in cielo {
+                assert!((0.0..=1.0).contains(&canal));
+            }
+        }
+    }
 
     #[test]
     fn la_barra_tiene_una_casilla_por_bloque() {

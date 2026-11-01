@@ -6,6 +6,7 @@
 pub mod block;
 pub mod chunk;
 pub mod generacion;
+pub mod geografia;
 pub mod guardado;
 pub mod meshing;
 pub mod mundo;

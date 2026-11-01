@@ -22,7 +22,12 @@ use std::path::{Path, PathBuf};
 use super::block::Bloque;
 
 const FIRMA: &[u8; 4] = b"MONT";
-const VERSION: u32 = 1;
+/// Versión 2 añade la hora del mundo. La 1 sigue siendo legible.
+const VERSION: u32 = 2;
+const VERSION_MINIMA: u32 = 1;
+
+/// Hora por defecto al cargar partidas antiguas (media mañana).
+pub const HORA_INICIAL: f32 = 0.15;
 
 /// Cambios de bloques respecto al terreno generado, por coordenada global.
 pub type Cambios = HashMap<(i32, i32, i32), Bloque>;
@@ -32,6 +37,9 @@ pub struct Partida {
     pub posicion: [f32; 3],
     pub yaw: f32,
     pub pitch: f32,
+    /// Hora del mundo en [0, 1): 0 amanecer, 0.25 mediodía,
+    /// 0.5 atardecer, 0.75 medianoche.
+    pub hora: f32,
     pub cambios: Cambios,
 }
 
@@ -59,6 +67,7 @@ pub fn guardar(ruta: &Path, partida: &Partida) -> io::Result<()> {
     }
     datos.extend_from_slice(&partida.yaw.to_le_bytes());
     datos.extend_from_slice(&partida.pitch.to_le_bytes());
+    datos.extend_from_slice(&partida.hora.to_le_bytes());
 
     let cantidad = u32::try_from(partida.cambios.len())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "demasiados cambios"))?;
@@ -93,7 +102,7 @@ pub fn cargar(ruta: &Path) -> io::Result<Partida> {
     }
 
     let version = lector.u32()?;
-    if version != VERSION {
+    if !(VERSION_MINIMA..=VERSION).contains(&version) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("versión de partida no soportada: {version}"),
@@ -103,6 +112,11 @@ pub fn cargar(ruta: &Path) -> io::Result<Partida> {
     let posicion = [lector.f32()?, lector.f32()?, lector.f32()?];
     let yaw = lector.f32()?;
     let pitch = lector.f32()?;
+    let hora = if version >= 2 {
+        lector.f32()?
+    } else {
+        HORA_INICIAL
+    };
 
     let cantidad = lector.u32()? as usize;
     let mut cambios = Cambios::with_capacity(cantidad);
@@ -118,6 +132,7 @@ pub fn cargar(ruta: &Path) -> io::Result<Partida> {
         posicion,
         yaw,
         pitch,
+        hora,
         cambios,
     })
 }
@@ -174,6 +189,7 @@ mod tests {
             posicion: [1.5, 22.25, -3.0],
             yaw: 0.75,
             pitch: -0.4,
+            hora: 0.42,
             cambios: Cambios::new(),
         };
         partida.cambios.insert((1, 2, 3), Bloque::Piedra);
@@ -187,7 +203,27 @@ mod tests {
         assert_eq!(leida.posicion, partida.posicion);
         assert_eq!(leida.yaw, partida.yaw);
         assert_eq!(leida.pitch, partida.pitch);
+        assert_eq!(leida.hora, partida.hora);
         assert_eq!(leida.cambios, partida.cambios);
+    }
+
+    #[test]
+    fn una_partida_de_la_version_1_usa_la_hora_inicial() {
+        let ruta = ruta_temporal("v1");
+        let mut datos = Vec::new();
+        datos.extend_from_slice(FIRMA);
+        datos.extend_from_slice(&1u32.to_le_bytes());
+        for valor in [1.0f32, 20.0, 2.0, 0.5, -0.2] {
+            datos.extend_from_slice(&valor.to_le_bytes());
+        }
+        datos.extend_from_slice(&0u32.to_le_bytes());
+        fs::write(&ruta, &datos).expect("escribir");
+
+        let leida = cargar(&ruta).expect("cargar versión 1");
+        let _ = fs::remove_file(&ruta);
+
+        assert_eq!(leida.hora, HORA_INICIAL);
+        assert_eq!(leida.posicion, [1.0, 20.0, 2.0]);
     }
 
     #[test]

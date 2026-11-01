@@ -30,6 +30,8 @@ pub struct App {
     tiempo_titulo: f32,
     /// Tiempo acumulado desde el último autoguardado.
     tiempo_guardado: f32,
+    /// Hay que recentrar el cursor en el próximo frame.
+    recentrar: bool,
 }
 
 impl App {
@@ -42,6 +44,7 @@ impl App {
             ruta_partida: guardado::ruta_por_defecto(),
             tiempo_titulo: 0.0,
             tiempo_guardado: 0.0,
+            recentrar: false,
         }
     }
 
@@ -86,6 +89,11 @@ impl App {
                 continue;
             }
             let datos = self.juego.mundo.malla_de(clave);
+            // Los chunks vacíos (solo aire) no gastan memoria en la GPU.
+            if datos.is_empty() {
+                render.quitar_chunk(clave);
+                continue;
+            }
             if let Err(err) = render.subir_chunk(clave, &datos) {
                 eprintln!("Montworld: no se pudo subir el chunk {clave:?}: {err}");
             }
@@ -147,6 +155,13 @@ impl App {
 
         self.aplicar_cambios();
 
+        // Recentrar el cursor una vez por frame (no en cada evento de
+        // ratón): en X11 cada warp es una ida y vuelta al servidor.
+        if self.recentrar {
+            self.centrar_cursor();
+            self.recentrar = false;
+        }
+
         // Autoguardado periódico, además del guardado al salir.
         self.tiempo_guardado += frame.delta;
         if self.tiempo_guardado >= 20.0 {
@@ -157,7 +172,7 @@ impl App {
         let Some(render) = self.render.as_mut() else {
             return;
         };
-        render.dibujar(&self.juego.jugador.camara);
+        render.dibujar(&self.juego.jugador.camara, self.juego.hora());
 
         let fps = frame.fps.round() as u32;
         self.tiempo_titulo += frame.delta;
@@ -165,14 +180,22 @@ impl App {
             self.tiempo_titulo = 0.0;
             let p = self.juego.jugador.camara.posicion;
             render.ventana().set_title(&format!(
-                "Montworld - {fps} FPS - ({:.1}, {:.1}, {:.1}) - {} chunks",
+                "Montworld - {fps} FPS - ({:.1}, {:.1}, {:.1}) - {} chunks - {} - {}",
                 p.x,
                 p.y,
                 p.z,
-                self.juego.mundo.cantidad()
+                self.juego.mundo.cantidad(),
+                hora_legible(self.juego.hora()),
+                crate::world::geografia::nombre(self.juego.zona())
             ));
         }
     }
+}
+
+/// Convierte la hora del mundo (0..1) en un reloj HH:MM.
+fn hora_legible(hora: f32) -> String {
+    let minutos = (hora.rem_euclid(1.0) * 24.0 * 60.0) as u32;
+    format!("{:02}:{:02}", (minutos / 60) % 24, minutos % 60)
 }
 
 /// Teclas 1 a 6: índice de la barra rápida.
@@ -215,7 +238,6 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                self.juego.reiniciar_streaming();
                 self.aplicar_cambios();
                 self.actualizar_barra();
             }
@@ -268,6 +290,9 @@ impl ApplicationHandler for App {
                             } else if let Some(indice) = indice_de_barra(codigo) {
                                 self.juego.seleccionar(indice);
                                 self.actualizar_barra();
+                            } else if codigo == KeyCode::KeyT {
+                                // Atajo de prueba: adelanta una hora.
+                                self.juego.avanzar_hora(1.0 / 24.0);
                             } else {
                                 self.entrada.presionar(codigo);
                             }
@@ -328,7 +353,7 @@ impl ApplicationHandler for App {
             && self.entrada.capturado
         {
             self.entrada.sumar_raton(delta.0 as f32, delta.1 as f32);
-            self.centrar_cursor();
+            self.recentrar = true;
         }
     }
 

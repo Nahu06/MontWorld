@@ -58,9 +58,13 @@ FASE 2 - CONTENIDO
     hojas; falta el atlas de texturas)
 [x] Generación de terreno por ruido (relieve, cuevas y árboles)
     (2026-10-30, probado por el usuario)
-[ ] Ciclo día/noche e iluminación
+[~] Ciclo día/noche e iluminación (cielo con sol cuadrado, luna
+    redonda y estrellas; implementado 2026-10-30, pendiente de prueba)
 [x] Inventario / barra rápida de bloques
     (barra de 4 bloques con teclas 1-4 y rueda, 2026-10-30, probada)
+[~] Mundo infinito en vertical (chunks 3D) y sistema geográfico por
+    altitud (implementado 2026-10-30, pendiente de prueba)
+[ ] Minerales y objetos repartidos por profundidad usando geografia
 [ ] [Por definir con el usuario: crafteo, supervivencia, criaturas,
     multijugador]
 
@@ -68,7 +72,10 @@ FASE 2 - CONTENIDO
 FASE 3 - PULIDO Y RENDIMIENTO
 ------------------------------------------------------------
 [~] Medir fps reales en PC y en Galaxy A06
-    (PC: 60 fps con 25 chunks, 2026-10-30; falta el móvil)
+    (PC: 60 fps con 25 chunks y contador honesto en v0.0.13; falta el
+    móvil)
+[ ] Multihilo: generación de chunks y meshing en hilos de trabajo con
+    canales mpsc (regla 7)
 [ ] Optimizaciones: greedy meshing, frustum culling, niebla,
     reducción de draw calls
 [ ] Sonido y música
@@ -120,6 +127,20 @@ v0.0.10 - 2026-10-30 - Lecho de roca madre irrompible en el fondo
 v0.0.11 - 2026-10-30 - Cuevas con ruido 3D, árboles (madera y
          hojas), dos bloques nuevos y barra ampliada a 6 casillas
          (teclas 1-6). Probado por el usuario.
+v0.0.12 - 2026-10-30 - Ciclo día/noche de 600 s: cielo dinámico,
+         luz global en los bloques, sol cuadrado, luna redonda y
+         estrellas. El cielo no se desplaza al caminar (vista sin
+         traslación). La hora se guarda en la partida (formato v2,
+         compatible con v1). Tecla T para adelantar una hora.
+v0.0.13 - 2026-11-01 - Mundo infinito en vertical: chunks 3D
+         (cx, cy, cz), carga 5×5×5 con presupuesto por frame, terreno
+         de -20 a 48, cuevas en cualquier profundidad, sin lecho rocoso
+         y módulo de geografía por altitud con la zona visible en el
+         título. Contador de FPS real por ventana de 0,5 s y reaparición
+         corregida a y = -256.
+v0.0.14 - En preparación - Multihilo: generación y meshing en hilos de
+         trabajo, comunicación por canales y subida a GPU en el hilo
+         principal.
 
 ------------------------------------------------------------
 REGISTRO
@@ -158,4 +179,11 @@ REGISTRO
              con reaparición arriba. Probado por el usuario.
              v0.0.11: cuevas, árboles, madera/hojas y barra de 6.
              Probado por el usuario.
-             Siguiente paso: atlas de texturas o Android.
+             v0.0.12: ciclo día/noche con cielo independiente de la
+             cámara, sol/luna/estrellas y hora persistente. Probado por
+             el usuario.
+             v0.0.13: chunks 3D, mundo infinito en vertical, terreno
+             ampliado, cuevas profundas, geografía por altitud, contador
+             de FPS real y reaparición a -256. Pendiente de prueba.
+             Nueva regla 7: multihilo obligatorio.
+             v0.0.14: pasar generación y meshing a hilos de trabajo.

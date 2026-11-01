@@ -130,7 +130,7 @@ mod tests {
     use crate::world::chunk::Chunk;
 
     fn chunk_con_bloque(x: i32, y: i32, z: i32) -> Chunk {
-        let mut chunk = Chunk::new();
+        let mut chunk = Chunk::new((0, 0, 0));
         chunk.poner(x, y, z, Bloque::Piedra);
         chunk
     }
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn sin_bloques_no_hay_impacto() {
-        let chunk = Chunk::new();
+        let chunk = Chunk::new((0, 0, 0));
         assert_eq!(
             lanzar(
                 Vec3::new(8.5, 20.0, 8.5),

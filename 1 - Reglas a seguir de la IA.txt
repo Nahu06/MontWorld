@@ -69,5 +69,22 @@ Proyecto: Montworld
    - Si un cambio obliga a romper esta estructura, avisar y proponer
      una alternativa antes de hacerlo.
 
+7) MULTIHILO OBLIGATORIO
+   El juego debe ser multihilo y la estructura se diseña alrededor de
+   eso.
+
+   - El hilo principal es el único que habla con winit y OpenGL: el
+     contexto GL no se comparte entre hilos.
+   - La generación de chunks y el meshing van a hilos de trabajo. El
+     hilo principal solo encola trabajos y sube a la GPU las mallas
+     terminadas.
+   - La comunicación entre hilos es por canales (mpsc) y mensajes
+     inmutables; nada de estado compartido sin sincronizar.
+   - El mundo autoritativo (bloques y cambios del jugador) vive en el
+     hilo principal. Los trabajadores reciben copias o instantáneas.
+   - El hilo principal nunca se bloquea esperando a un trabajador.
+   - Todo módulo nuevo debe indicar en qué hilo corre y qué datos
+     comparte.
+
 ============================================================
 Estas reglas aplican a cualquier IA que trabaje en el proyecto.

@@ -159,7 +159,7 @@ fn empujar_cara(
 /// Coloca un bloque de prueba aislado para los tests.
 #[cfg(test)]
 fn chunk_con_bloque(x: i32, y: i32, z: i32) -> Chunk {
-    let mut chunk = Chunk::new();
+    let mut chunk = Chunk::new((0, 0, 0));
     chunk.poner(x, y, z, Bloque::Piedra);
     chunk
 }
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn un_bloque_rodeado_no_genera_geometria() {
-        let mut chunk = Chunk::new();
+        let mut chunk = Chunk::new((0, 0, 0));
         for y in 7..10 {
             for z in 7..10 {
                 for x in 7..10 {
